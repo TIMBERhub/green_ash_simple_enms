@@ -213,6 +213,7 @@
 
 	# calibration regions
 	if (file.exists('./regions/calibration_regions.rda')) load('./regions/calibration_regions.rda')
+	if (file.exists('./regions/studyRegion_croppedToPresentLand.rda')) load('./regions/studyRegion_croppedToPresentLand.rda')
 	
 	# North America spatial polygons
 	if (file.exists('./regions/greatLakesSpAlb.rda')) load('./regions/greatLakesSpAlb.rda')
@@ -315,6 +316,12 @@ say('#######################################', post=2)
 		save(nam0Sp, file='./regions/gadm36_northAmerica_sp_level_0.rda')
 		save(nam0SpAlb, file='./regions/gadm36_northAmerica_spAlb_level_0.rda')
 			
+	### study regoiin cropped to present-day land
+	if (!exists('studyRegionCroppedToPresentSpAlb')) {
+		studyRegionCroppedToPresentSpAlb <- crop(studyRegionSpAlb, nam0SpAlb)
+		save(studyRegionCroppedToPresentSpAlb, file='./regions/studyRegion_croppedToPresentLand.rda')
+	}
+		
 
 	### range maps
 	dirCreate('./regions/bien_range_map')
@@ -492,59 +499,63 @@ say('##################################', post=2)
 	
 	### create buffers
 	
-	# buffer around occurrences
-	calibRegionsSpAlb <- list()
-	for (i in seq_along(exts)) {
-		calibRegionsSpAlb[[i]] <- gBuffer(occsSpAlb, width=exts[i] * 1000)
-	}
-
-	# crop area outside North America, remove undersampled states, remove Great Lakes
-	undersampledSpAlb <- nam1SpAlb[nam1SpAlb$NAME_1 %in% undersampled, ]
-	
-	for (i in seq_along(exts)) {
-		# calibRegionsSpAlb[[i]] <- gIntersection(calibRegionsSpAlb[[i]], sr) # not doing this because some points outside study region
-		calibRegionsSpAlb[[i]] <- rgeos::gIntersection(calibRegionsSpAlb[[i]], nam0SpAlb)
-		calibRegionsSpAlb[[i]] <- rgeos::gDifference(calibRegionsSpAlb[[i]], undersampledSpAlb, checkValidity=TRUE)
-		calibRegionsSpAlb[[i]] <- rgeos::gDifference(calibRegionsSpAlb[[i]], greatLakesSpAlb, checkValidity=TRUE)
-	}
-	
-	studyRegionCroppedToPresentSpAlb <- crop(studyRegionSpAlb, nam0SpAlb)
-	
-	# inspect
-	png('./figures_and_tables/regions.png', width=1200, height=1000)
-
-		par(cex.main=1.4)
-		plot(calibRegionsSpAlb[[length(calibRegionsSpAlb)]], border=NA, col=NA, main='Calibration Regions')
-		plot(studyRegionCroppedToPresentSpAlb, add=TRUE, lwd=0.8, col='khaki1')
+	if (!exists('calibRegionsSpAlb')) {
 		
-		for (i in rev(seq_along(exts))) {
-			plot(calibRegionsSpAlb[[i]], col=paste0('aquamarine', 4 + 1 - i), lwd=0.8, add=TRUE)
+		# buffer around occurrences
+		calibRegionsSpAlb <- list()
+		for (i in seq_along(exts)) {
+			calibRegionsSpAlb[[i]] <- gBuffer(occsSpAlb, width=exts[i] * 1000)
+		}
+
+		# crop area outside North America, remove undersampled states, remove Great Lakes
+		undersampledSpAlb <- nam1SpAlb[nam1SpAlb$NAME_1 %in% undersampled, ]
+		
+		for (i in seq_along(exts)) {
+			# calibRegionsSpAlb[[i]] <- gIntersection(calibRegionsSpAlb[[i]], sr) # not doing this because some points outside study region
+			calibRegionsSpAlb[[i]] <- rgeos::gIntersection(calibRegionsSpAlb[[i]], nam0SpAlb)
+			calibRegionsSpAlb[[i]] <- rgeos::gDifference(calibRegionsSpAlb[[i]], undersampledSpAlb, checkValidity=TRUE)
+			calibRegionsSpAlb[[i]] <- rgeos::gDifference(calibRegionsSpAlb[[i]], greatLakesSpAlb, checkValidity=TRUE)
 		}
 		
-		plot(nam1SpAlb, add=TRUE)
-		points(occsSpAlb, pch=16, cex=1.4)
-
-		legend <- c('Records', paste('Calibration region:', rev(exts), 'km'), 'Study region (modern)')
-		fill <- c(NA, paste0('aquamarine', 4 + 1 - rev(seq_along(exts))), 'khaki1')
-		pch <- c(16, rep(NA, length(exts)), NA)
-		pt.cex <- c(1.4, rep(NA, length(exts)), NA)
-		border <- c(NA, rep(0.8, length(exts)), 0.8)
-		col <- c('black', rep(NA, length(exts)), NA)
+		studyRegionCroppedToPresentSpAlb <- crop(studyRegionSpAlb, nam0SpAlb)
 		
-		legend('bottomright',
-			   legend=legend,
-			   fill=fill,
-			   pch=pch,
-			   pt.cex=pt.cex,
-			   border=border,
-			   col=col,
-			   bty='n', cex=1.6
-		)
-		
-	dev.off()
+		# inspect
+		png('./figures_and_tables/regions.png', width=1200, height=1000)
 
-	names(calibRegionsSpAlb) <- paste0('bufferAroundOccs_', exts, 'km')
-	save(calibRegionsSpAlb, file='./regions/calibration_regions.rda')
+			par(cex.main=1.4)
+			plot(calibRegionsSpAlb[[length(calibRegionsSpAlb)]], border=NA, col=NA, main='Calibration Regions')
+			plot(studyRegionCroppedToPresentSpAlb, add=TRUE, lwd=0.8, col='khaki1')
+			
+			for (i in rev(seq_along(exts))) {
+				plot(calibRegionsSpAlb[[i]], col=paste0('aquamarine', 4 + 1 - i), lwd=0.8, add=TRUE)
+			}
+			
+			plot(nam1SpAlb, add=TRUE)
+			points(occsSpAlb, pch=16, cex=1.4)
+
+			legend <- c('Records', paste('Calibration region:', rev(exts), 'km'), 'Study region (modern)')
+			fill <- c(NA, paste0('aquamarine', 4 + 1 - rev(seq_along(exts))), 'khaki1')
+			pch <- c(16, rep(NA, length(exts)), NA)
+			pt.cex <- c(1.4, rep(NA, length(exts)), NA)
+			border <- c(NA, rep(0.8, length(exts)), 0.8)
+			col <- c('black', rep(NA, length(exts)), NA)
+			
+			legend('bottomright',
+				   legend=legend,
+				   fill=fill,
+				   pch=pch,
+				   pt.cex=pt.cex,
+				   border=border,
+				   col=col,
+				   bty='n', cex=1.6
+			)
+			
+		dev.off()
+
+		names(calibRegionsSpAlb) <- paste0('bufferAroundOccs_', exts, 'km')
+		save(calibRegionsSpAlb, file='./regions/calibration_regions.rda')
+		
+	}
 
 say('################################', pre=1)
 say('### select climate variables ###')
@@ -788,14 +799,6 @@ say('###########################################', post=2)
 		
 		bgTestSp <- SpatialPoints(bgTest[ , ll], getCRS('wgs84', TRUE))
 		bgTestSpAlb <- sp::spTransform(bgTestSp, getCRS('albersNA', TRUE))
-		
-		### !!!!! NEXT LINE CAN TAKE HOURS !!!!! ###
-		if (file.exists('./regions/studyRegion_croppedToPresentLand.rda')) {
-			load('./regions/studyRegion_croppedToPresentLand.rda')
-		} else {
-			studyRegionCroppedToPresentSpAlb <- crop(studyRegionSpAlb, nam0SpAlb)
-			save(studyRegionCroppedToPresentSpAlb, file='./regions/studyRegion_croppedToPresentLand.rda')
-		}
 		
 		blockRast <- rastWithSquareCells(studyRegionCroppedToPresentSpAlb, res=foldBuffer_m)
 
