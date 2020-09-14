@@ -154,6 +154,8 @@
 ### constants ###
 #################
 
+	set.seed(pi)
+
 	# species name
 	species <- 'Fraxinus pennsylvanica'
 
@@ -793,7 +795,6 @@ say('###########################################', post=2)
 		blockRast <- rastWithSquareCells(studyRegionCropSpAlb, res=foldBuffer_m)
 
 		# create folds based on occurrences such that there is at least a minimum number of occurrences per fold
-		set.seed(123)
 		minNumInFold <- -Inf
 		numFolds <- 50
 		maxTries <- 20
