@@ -508,14 +508,14 @@ say('##################################', post=2)
 		calibRegionsSpAlb[[i]] <- rgeos::gDifference(calibRegionsSpAlb[[i]], greatLakesSpAlb, checkValidity=TRUE)
 	}
 	
-	studyRegionCropSpAlb <- crop(studyRegionSpAlb, nam0SpAlb)
+	studyRegionCroppedToPresentSpAlb <- crop(studyRegionSpAlb, nam0SpAlb)
 	
 	# inspect
 	png('./figures_and_tables/regions.png', width=1200, height=1000)
 
 		par(cex.main=1.4)
 		plot(calibRegionsSpAlb[[length(calibRegionsSpAlb)]], border=NA, col=NA, main='Calibration Regions')
-		plot(studyRegionCropSpAlb, add=TRUE, lwd=0.8, col='khaki1')
+		plot(studyRegionCroppedToPresentSpAlb, add=TRUE, lwd=0.8, col='khaki1')
 		
 		for (i in rev(seq_along(exts))) {
 			plot(calibRegionsSpAlb[[i]], col=paste0('aquamarine', 4 + 1 - i), lwd=0.8, add=TRUE)
@@ -790,9 +790,14 @@ say('###########################################', post=2)
 		bgTestSpAlb <- sp::spTransform(bgTestSp, getCRS('albersNA', TRUE))
 		
 		### !!!!! NEXT LINE CAN TAKE HOURS !!!!! ###
-		studyRegionCropSpAlb <- crop(studyRegionSpAlb, nam0SpAlb)
+		if (file.exists('./regions/studyRegion_croppedToPresentLand.rda')) {
+			load('./regions/studyRegion_croppedToPresentLand.rda')
+		} else {
+			studyRegionCroppedToPresentSpAlb <- crop(studyRegionSpAlb, nam0SpAlb)
+			save(studyRegionCroppedToPresentSpAlb, file='./regions/studyRegion_croppedToPresentLand.rda')
+		}
 		
-		blockRast <- rastWithSquareCells(studyRegionCropSpAlb, res=foldBuffer_m)
+		blockRast <- rastWithSquareCells(studyRegionCroppedToPresentSpAlb, res=foldBuffer_m)
 
 		# create folds based on occurrences such that there is at least a minimum number of occurrences per fold
 		minNumInFold <- -Inf
@@ -927,7 +932,7 @@ say('###########################################', post=2)
 		
 			par(mfrow=c(1, 3), oma=rep(0, 4), cex.main=2.2)
 			
-			plot(studyRegionCropSpAlb, main=('Training, calibration,\nand evaluation occurrences'))
+			plot(studyRegionCroppedToPresentSpAlb, main=('Training, calibration,\nand evaluation occurrences'))
 			x <- occsBg$calibEvalOccsBg[[1]]$occsBg
 			x <- x[x$presBg == 1, ]
 			x <- SpatialPointsDataFrame(x[ , ll], data=x, proj4string=getCRS('wgs84', TRUE))
@@ -938,7 +943,7 @@ say('###########################################', post=2)
 			
 			legend('bottomright', inset=0.1, legend=c('Training', 'Calibration', 'Evaluation'), pch=pch, cex=2.2, col=c('black', 'cyan', 'magenta'), bty='n')
 			
-			plot(studyRegionCropSpAlb, main=('Training and calibration\nbackground sites (narrowest extent)'))
+			plot(studyRegionCroppedToPresentSpAlb, main=('Training and calibration\nbackground sites (narrowest extent)'))
 			x <- occsBg$calibEvalOccsBg[[1]]$occsBg
 			x <- x[x$presBg == 0, ]
 			x <- SpatialPointsDataFrame(x[ , ll], data=x, proj4string=getCRS('wgs84', TRUE))
@@ -946,7 +951,7 @@ say('###########################################', post=2)
 			points(x, pch=pch, cex=cex)
 			points(x[x$fold==calibFold, ], pch=pch, cex=cex, col='cyan')
 			
-			plot(studyRegionCropSpAlb, main=('Evaluation background sites'))
+			plot(studyRegionCroppedToPresentSpAlb, main=('Evaluation background sites'))
 			x <- occsBg$testBg
 			x <- SpatialPointsDataFrame(x[ , ll], data=x, proj4string=getCRS('wgs84', TRUE))
 			x <- sp::spTransform(x, getCRS('albersNA', TRUE))
