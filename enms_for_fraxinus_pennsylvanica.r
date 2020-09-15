@@ -41,7 +41,7 @@
 ### setup ###
 #############
 
-	# source('C:/Ecology/Drive/Research/ABC vs Biogeography/NSF_ABI_2018_2021/data_and_analyses/green_ash/enms/code/simple_enms_for_green_ash.r')
+	# source('C:/Ecology/Drive/Research/ABC vs Biogeography/NSF_ABI_2018_2021/data_and_analyses/green_ash/enms/code/enms_for_fraxinus_pennsylvanica.r')
 
 	memory.limit(memory.limit() * 2^30)
 	rm(list=ls())
@@ -54,6 +54,7 @@
 	raster::rasterOptions(format='GTiff', overwrite=TRUE)
 
 	library(BIEN)
+	library(brglm2)
 	library(sp)
 	library(rgdal)
 	library(raster)
@@ -232,798 +233,798 @@
 	
 	if (file.exists('./regions/little_range_map/littleRangeSpAlb.rda')) load('./regions/little_range_map/littleRangeSpAlb.rda')
 	
-say('#######################################', pre=1)
-say('### obtain and process basemap data ###')
-say('#######################################', post=2)
+# say('#######################################', pre=1)
+# say('### obtain and process basemap data ###')
+# say('#######################################', post=2)
 
-	say('Basemap data includes shapefiles of North American countries and the range maps of the species from BIEN and Little. We will create equal-area versions of each in an Albers projection (object names will be suffixed with "Alb")', breaks=80)
+	# say('Basemap data includes shapefiles of North American countries and the range maps of the species from BIEN and Little. We will create equal-area versions of each in an Albers projection (object names will be suffixed with "Alb")', breaks=80)
 
-	### North America Level 2
+	# ### North America Level 2
 		
-		mex <- getData('GADM', country='MEX', level=2, path='D:/ecology/!Scratch')
-		usa <- getData('GADM', country='USA', level=2, path='D:/ecology/!Scratch')
-		can <- getData('GADM', country='CAN', level=2, path='D:/ecology/!Scratch')
+		# mex <- getData('GADM', country='MEX', level=2, path='D:/ecology/!Scratch')
+		# usa <- getData('GADM', country='USA', level=2, path='D:/ecology/!Scratch')
+		# can <- getData('GADM', country='CAN', level=2, path='D:/ecology/!Scratch')
 
-		nam2Sp <- rbind(can, usa, mex)
+		# nam2Sp <- rbind(can, usa, mex)
 
-		# get lakes for removal from other geographies... add small buffer because lake borders don't exactly align
-		greatLakesSp2 <- nam2Sp[nam2Sp$ENGTYPE_2 == 'Water body', ]
-		greatLakesSpAlb2 <- sp::spTransform(greatLakesSp2, getCRS('albersNA', TRUE))
-		greatLakesSpAlb2 <- gBuffer(greatLakesSpAlb2, width=10)
-		greatLakesSp2 <- sp::spTransform(greatLakesSpAlb2, getCRS('wgs84', TRUE))
-		greatLakesSp <- gUnaryUnion(greatLakesSp2)
+		# # get lakes for removal from other geographies... add small buffer because lake borders don't exactly align
+		# greatLakesSp2 <- nam2Sp[nam2Sp$ENGTYPE_2 == 'Water body', ]
+		# greatLakesSpAlb2 <- sp::spTransform(greatLakesSp2, getCRS('albersNA', TRUE))
+		# greatLakesSpAlb2 <- gBuffer(greatLakesSpAlb2, width=10)
+		# greatLakesSp2 <- sp::spTransform(greatLakesSpAlb2, getCRS('wgs84', TRUE))
+		# greatLakesSp <- gUnaryUnion(greatLakesSp2)
 		
-		greatLakesSpAlb <- sp::spTransform(greatLakesSp2, getCRS('albersNA', TRUE))
+		# greatLakesSpAlb <- sp::spTransform(greatLakesSp2, getCRS('albersNA', TRUE))
 		
-		# names of level 1 areas with lakes
-		lakeNames0 <- unique(nam2Sp@data$NAME_0[nam2Sp@data$ENGTYPE_2 == 'Water body'])
-		lakeNames1 <- unique(nam2Sp@data$NAME_1[nam2Sp@data$ENGTYPE_2 == 'Water body'])
+		# # names of level 1 areas with lakes
+		# lakeNames0 <- unique(nam2Sp@data$NAME_0[nam2Sp@data$ENGTYPE_2 == 'Water body'])
+		# lakeNames1 <- unique(nam2Sp@data$NAME_1[nam2Sp@data$ENGTYPE_2 == 'Water body'])
 		
-		# remove lakes
-		nam2Sp <- nam2Sp[nam2Sp@data$ENGTYPE_2 != 'Water body', ]
+		# # remove lakes
+		# nam2Sp <- nam2Sp[nam2Sp@data$ENGTYPE_2 != 'Water body', ]
 		
-		# not saving because only need for identifying lake areas
+		# # not saving because only need for identifying lake areas
 		
-		save(greatLakesSpAlb, file='./regions/greatLakesSpAlb.rda')
+		# save(greatLakesSpAlb, file='./regions/greatLakesSpAlb.rda')
 
-	### North America Level 1
+	# ### North America Level 1
 	
-		mex <- getData('GADM', country='MEX', level=1, path='D:/ecology/!Scratch')
-		usa <- getData('GADM', country='USA', level=1, path='D:/ecology/!Scratch')
-		can <- getData('GADM', country='CAN', level=1, path='D:/ecology/!Scratch')
+		# mex <- getData('GADM', country='MEX', level=1, path='D:/ecology/!Scratch')
+		# usa <- getData('GADM', country='USA', level=1, path='D:/ecology/!Scratch')
+		# can <- getData('GADM', country='CAN', level=1, path='D:/ecology/!Scratch')
 
-		nam1Sp <- rbind(can, usa, mex)
+		# nam1Sp <- rbind(can, usa, mex)
 		
-		for (thisLevel in lakeNames1) {
+		# for (thisLevel in lakeNames1) {
 		
-			thisLargerSp <- nam1Sp[nam1Sp@data$NAME_1 == thisLevel, ]
-			df <- thisLargerSp@data
-			nam1Sp <- nam1Sp[-which(nam1Sp@data$NAME_1 == thisLevel), ]
-			thisLargerSansLakesSp <- gDifference(thisLargerSp, greatLakesSp)
-			thisLargerSansLakesSp <- as(thisLargerSansLakesSp, 'SpatialPolygonsDataFrame')
-			projection(thisLargerSansLakesSp) <- projection(nam1Sp)
-			thisLargerSansLakesSp@data <- df
-			nam1Sp <- rbind(nam1Sp, thisLargerSansLakesSp)
+			# thisLargerSp <- nam1Sp[nam1Sp@data$NAME_1 == thisLevel, ]
+			# df <- thisLargerSp@data
+			# nam1Sp <- nam1Sp[-which(nam1Sp@data$NAME_1 == thisLevel), ]
+			# thisLargerSansLakesSp <- gDifference(thisLargerSp, greatLakesSp)
+			# thisLargerSansLakesSp <- as(thisLargerSansLakesSp, 'SpatialPolygonsDataFrame')
+			# projection(thisLargerSansLakesSp) <- projection(nam1Sp)
+			# thisLargerSansLakesSp@data <- df
+			# nam1Sp <- rbind(nam1Sp, thisLargerSansLakesSp)
 			
-		}
+		# }
 
-		nam1SpAlb <- sp::spTransform(nam1Sp, getCRS('albersNA', TRUE))
-		save(nam1Sp, file='./regions/gadm36_northAmerica_sp_level_1.rda')
-		save(nam1SpAlb, file='./regions/gadm36_northAmerica_spAlb_level_1.rda')
+		# nam1SpAlb <- sp::spTransform(nam1Sp, getCRS('albersNA', TRUE))
+		# save(nam1Sp, file='./regions/gadm36_northAmerica_sp_level_1.rda')
+		# save(nam1SpAlb, file='./regions/gadm36_northAmerica_spAlb_level_1.rda')
 	
-	### North America level 0
+	# ### North America level 0
 
-		mex <- getData('GADM', country='MEX', level=0, path='D:/ecology/!Scratch')
-		usa <- getData('GADM', country='USA', level=0, path='D:/ecology/!Scratch')
-		can <- getData('GADM', country='CAN', level=0, path='D:/ecology/!Scratch')
+		# mex <- getData('GADM', country='MEX', level=0, path='D:/ecology/!Scratch')
+		# usa <- getData('GADM', country='USA', level=0, path='D:/ecology/!Scratch')
+		# can <- getData('GADM', country='CAN', level=0, path='D:/ecology/!Scratch')
 
-		nam0Sp <- rbind(can, usa, mex)
+		# nam0Sp <- rbind(can, usa, mex)
 
-		for (thisLevel in lakeNames0) {
+		# for (thisLevel in lakeNames0) {
 		
-			thisLargerSp <- nam0Sp[nam0Sp@data$NAME_0 == thisLevel, ]
-			df <- thisLargerSp@data
-			nam0Sp <- nam0Sp[-which(nam0Sp@data$NAME_0 == thisLevel), ]
-			thisLargerSansLakesSp <- gDifference(thisLargerSp, greatLakesSp)
-			thisLargerSansLakesSp <- as(thisLargerSansLakesSp, 'SpatialPolygonsDataFrame')
-			projection(thisLargerSansLakesSp) <- projection(nam1Sp)
-			thisLargerSansLakesSp@data <- df
-			nam0Sp <- rbind(nam0Sp, thisLargerSansLakesSp)
+			# thisLargerSp <- nam0Sp[nam0Sp@data$NAME_0 == thisLevel, ]
+			# df <- thisLargerSp@data
+			# nam0Sp <- nam0Sp[-which(nam0Sp@data$NAME_0 == thisLevel), ]
+			# thisLargerSansLakesSp <- gDifference(thisLargerSp, greatLakesSp)
+			# thisLargerSansLakesSp <- as(thisLargerSansLakesSp, 'SpatialPolygonsDataFrame')
+			# projection(thisLargerSansLakesSp) <- projection(nam1Sp)
+			# thisLargerSansLakesSp@data <- df
+			# nam0Sp <- rbind(nam0Sp, thisLargerSansLakesSp)
 			
-		}
+		# }
 
-		nam0SpAlb <- sp::spTransform(nam0Sp, getCRS('albersNA', TRUE))
-		save(nam0Sp, file='./regions/gadm36_northAmerica_sp_level_0.rda')
-		save(nam0SpAlb, file='./regions/gadm36_northAmerica_spAlb_level_0.rda')
+		# nam0SpAlb <- sp::spTransform(nam0Sp, getCRS('albersNA', TRUE))
+		# save(nam0Sp, file='./regions/gadm36_northAmerica_sp_level_0.rda')
+		# save(nam0SpAlb, file='./regions/gadm36_northAmerica_spAlb_level_0.rda')
 			
-	### study regoiin cropped to present-day land
-	if (!exists('studyRegionCroppedToPresentSpAlb')) {
-		studyRegionCroppedToPresentSpAlb <- crop(studyRegionSpAlb, nam0SpAlb)
-		save(studyRegionCroppedToPresentSpAlb, file='./regions/studyRegion_croppedToPresentLand.rda')
-	}
+	# ### study regoiin cropped to present-day land
+	# if (!exists('studyRegionCroppedToPresentSpAlb')) {
+		# studyRegionCroppedToPresentSpAlb <- crop(studyRegionSpAlb, nam0SpAlb)
+		# save(studyRegionCroppedToPresentSpAlb, file='./regions/studyRegion_croppedToPresentLand.rda')
+	# }
 		
 
-	### range maps
-	dirCreate('./regions/bien_range_map')
-	BIEN_ranges_species(species, directory='./regions/bien_range_map')
-	bienRange <- BIEN_ranges_load_species(species)
-	bienRangeAlb <- sp::spTransform(bienRange, getCRS('albersNA', TRUE))
+	# ### range maps
+	# dirCreate('./regions/bien_range_map')
+	# BIEN_ranges_species(species, directory='./regions/bien_range_map')
+	# bienRange <- BIEN_ranges_load_species(species)
+	# bienRangeAlb <- sp::spTransform(bienRange, getCRS('albersNA', TRUE))
 
-	littleRangeFileName <- 'C:/Ecology/Drive/Research/ABC vs Biogeography/NSF_ABI_2018_2021/data_and_analyses/green_ash/range_maps/little/fraxpenn.shp'
-	littleRange <- shapefile(littleRangeFileName)
-	projection(littleRange) <- getCRS('wgs84')
-	littleRange <- littleRange[littleRange$CODE == 1, ] # remove holes
-	littleRangeSpAlb <- sp::spTransform(littleRange, getCRS('albersNA', TRUE))
-	dirCreate('./regions/little_range_map')
-	save(littleRangeSpAlb, file='./regions/little_range_map/littleRangeSpAlb.rda')
+	# littleRangeFileName <- 'C:/Ecology/Drive/Research/ABC vs Biogeography/NSF_ABI_2018_2021/data_and_analyses/green_ash/range_maps/little/fraxpenn.shp'
+	# littleRange <- shapefile(littleRangeFileName)
+	# projection(littleRange) <- getCRS('wgs84')
+	# littleRange <- littleRange[littleRange$CODE == 1, ] # remove holes
+	# littleRangeSpAlb <- sp::spTransform(littleRange, getCRS('albersNA', TRUE))
+	# dirCreate('./regions/little_range_map')
+	# save(littleRangeSpAlb, file='./regions/little_range_map/littleRangeSpAlb.rda')
 			
-say('####################################', pre=1)
-say('### obtain and clean occurrences ###')
-say('####################################', post=2)
+# say('####################################', pre=1)
+# say('### obtain and clean occurrences ###')
+# say('####################################', post=2)
 
-	### obtain records
-	##################
+	# ### obtain records
+	# ##################
 		
-		speciesFileName <- paste0(
-			'./species_records/00_',
-			gsub(tolower(species), pattern=' ', replacement='_'),
-			'_bien_all_occurrences.rda'
-		)
+		# speciesFileName <- paste0(
+			# './species_records/00_',
+			# gsub(tolower(species), pattern=' ', replacement='_'),
+			# '_bien_all_occurrences.rda'
+		# )
 
-		if (file.exists(speciesFileName)) {
-			load(speciesFileName)
-		} else {
-			occsRaw <- BIEN_occurrence_species(
-				species=species,
-				cultivated = FALSE,
-				only.new.world = TRUE,
-				all.taxonomy = FALSE,
-				native.status = FALSE,
-				natives.only = TRUE,
-				observation.type = TRUE,
-				political.boundaries = TRUE,
-				collection.info = TRUE
-			)
+		# if (file.exists(speciesFileName)) {
+			# load(speciesFileName)
+		# } else {
+			# occsRaw <- BIEN_occurrence_species(
+				# species=species,
+				# cultivated = FALSE,
+				# only.new.world = TRUE,
+				# all.taxonomy = FALSE,
+				# native.status = FALSE,
+				# natives.only = TRUE,
+				# observation.type = TRUE,
+				# political.boundaries = TRUE,
+				# collection.info = TRUE
+			# )
 
-			sink('./species_records/bien_download.txt')
-				say('Data representing species records were downloaded from BIEN on', date(), '.')
-			sink()
-			save(occsRaw, file=speciesFileName)
-		}
+			# sink('./species_records/bien_download.txt')
+				# say('Data representing species records were downloaded from BIEN on', date(), '.')
+			# sink()
+			# save(occsRaw, file=speciesFileName)
+		# }
 
-		### remove occurrences with missing coordinates and dates:
-		occs <- occsRaw[!(is.na(occsRaw$longitude) | is.na(occsRaw$latitude) | is.na(occsRaw$date_collected)), ]
-		dim(occs)
+		# ### remove occurrences with missing coordinates and dates:
+		# occs <- occsRaw[!(is.na(occsRaw$longitude) | is.na(occsRaw$latitude) | is.na(occsRaw$date_collected)), ]
+		# dim(occs)
 
-		### remove records <1950 (period covered by Lorenz et al. 2016 climate data is 1950-2005):
-		occs$date_collected <- as.Date(occs$date_collected)
-		occs <- occs[!is.na(occs$date_collected), ]
-		occs <- occs[which(occs$date_collected >= as.Date(paste0(1950 + genTime_yr, '-01-01'))), ]
+		# ### remove records <1950 (period covered by Lorenz et al. 2016 climate data is 1950-2005):
+		# occs$date_collected <- as.Date(occs$date_collected)
+		# occs <- occs[!is.na(occs$date_collected), ]
+		# occs <- occs[which(occs$date_collected >= as.Date(paste0(1950 + genTime_yr, '-01-01'))), ]
 
-	### remove records in states where green ash has been naturalized (according to BONAP)
-	######################################################################################
+	# ### remove records in states where green ash has been naturalized (according to BONAP)
+	# ######################################################################################
 	
-		occs <- occs[!(occs$state_province %in% c('Washington', 'Oregon', 'Idaho', 'Utah', 'Colorado', 'Arizona', 'New Mexico', 'Chihuahua', 'British Columbia')), ]
-		occs <- occs[-which(occs$state_province == 'Texas' & occs$county == 'El Paso'), ]
+		# occs <- occs[!(occs$state_province %in% c('Washington', 'Oregon', 'Idaho', 'Utah', 'Colorado', 'Arizona', 'New Mexico', 'Chihuahua', 'British Columbia')), ]
+		# occs <- occs[-which(occs$state_province == 'Texas' & occs$county == 'El Paso'), ]
 		
-	### inspect occurrences
-	#######################
+	# ### inspect occurrences
+	# #######################
 		
-		### convert occurrences to spatial object
-		occsSp <- SpatialPointsDataFrame(
-			occs[ , ll],
-			data=occs,
-			proj4=getCRS('wgs84', TRUE)
-		)
+		# ### convert occurrences to spatial object
+		# occsSp <- SpatialPointsDataFrame(
+			# occs[ , ll],
+			# data=occs,
+			# proj4=getCRS('wgs84', TRUE)
+		# )
 
-		occsSpAlb <- sp::spTransform(occsSp, getCRS('albersNA', TRUE))
+		# occsSpAlb <- sp::spTransform(occsSp, getCRS('albersNA', TRUE))
 
-		png('./figures_and_tables/occurrences_raw.png', width=1200, height=1000)
+		# png('./figures_and_tables/occurrences_raw.png', width=1200, height=1000)
 		
-			par(mfrow=c(1, 2))
+			# par(mfrow=c(1, 2))
 			
-			# plot occurrences with BIEN range map
-			plot(occsSpAlb, col=NA, main='BIEN range map')
-			plot(bienRangeAlb, col=alpha('green', 0.4), border='green', add=TRUE)
-			points(occsSpAlb, pch=16, cex=0.9, col='black')
-			plot(nam1SpAlb, add=TRUE, border='gray')
+			# # plot occurrences with BIEN range map
+			# plot(occsSpAlb, col=NA, main='BIEN range map')
+			# plot(bienRangeAlb, col=alpha('green', 0.4), border='green', add=TRUE)
+			# points(occsSpAlb, pch=16, cex=0.9, col='black')
+			# plot(nam1SpAlb, add=TRUE, border='gray')
 
-			# plot occurrences with Little's range map
-			plot(occsSpAlb, col=NA, main='Little range map')
-			plot(littleRangeSpAlb, col=alpha('red', 0.4), border='red', add=TRUE)
-			points(occsSpAlb, pch=16, cex=0.9, col='black')
-			plot(nam1SpAlb, add=TRUE, border='gray')
+			# # plot occurrences with Little's range map
+			# plot(occsSpAlb, col=NA, main='Little range map')
+			# plot(littleRangeSpAlb, col=alpha('red', 0.4), border='red', add=TRUE)
+			# points(occsSpAlb, pch=16, cex=0.9, col='black')
+			# plot(nam1SpAlb, add=TRUE, border='gray')
 
-			title(sub=date(), outer=TRUE, cex.sub=0.7, line=-2)
+			# title(sub=date(), outer=TRUE, cex.sub=0.7, line=-2)
 			
-		dev.off()
+		# dev.off()
 
-		say('Things to note:')
-		say('* There is at least one occurrence in South America or its vicinity.')
-		say('* There are many occurrences outside Little\'s range polygon.')
-		say('* ...Especially in the northern part of peninsular Florida', post=2)
-		say('* ...and the western US', post=2)
+		# say('Things to note:')
+		# say('* There is at least one occurrence in South America or its vicinity.')
+		# say('* There are many occurrences outside Little\'s range polygon.')
+		# say('* ...Especially in the northern part of peninsular Florida', post=2)
+		# say('* ...and the western US', post=2)
 		
-		### examine areas in vicinity of Kentucky and Louisiana that appear to lack data
+		# ### examine areas in vicinity of Kentucky and Louisiana that appear to lack data
 
-		png('./figures_and_tables/occurrences_near_louisiana_kentucky.png', width=1200, height=1000)
+		# png('./figures_and_tables/occurrences_near_louisiana_kentucky.png', width=1200, height=1000)
 		
-			par(mfrow=c(1, 2))
+			# par(mfrow=c(1, 2))
 
-			plot(nam1SpAlb[nam1SpAlb@data$NAME_1 == 'Kentucky', ])
-			points(occsSpAlb, pch=16, cex=0.9, col='black')
+			# plot(nam1SpAlb[nam1SpAlb@data$NAME_1 == 'Kentucky', ])
+			# points(occsSpAlb, pch=16, cex=0.9, col='black')
 
-			plot(nam1SpAlb[nam1SpAlb@data$NAME_1 == 'Louisiana', ])
-			points(occsSpAlb, pch=16, cex=0.9, col='black')
+			# plot(nam1SpAlb[nam1SpAlb@data$NAME_1 == 'Louisiana', ])
+			# points(occsSpAlb, pch=16, cex=0.9, col='black')
 			
-			title(main=paste0('Missing records in ', paste(undersampled, collapse=' and ')), sub=date(), outer=TRUE, cex.sub=0.7, line=-2)
+			# title(main=paste0('Missing records in ', paste(undersampled, collapse=' and ')), sub=date(), outer=TRUE, cex.sub=0.7, line=-2)
 
-		dev.off()
+		# dev.off()
 			
-		say('So, yes, there is a bias in the central and Appalachian region of Kentucky... Note that the species genuinely does not appear in the "high" Appalachians. This is disturbing since the usual methods of correcting for bias like inverse-p weighting or spatial thinning would remove signal from its absence in these areas *plus* in areas that are undersampled like Kentucky and Louisiana.', post=2, breaks=80)
+		# say('So, yes, there is a bias in the central and Appalachian region of Kentucky... Note that the species genuinely does not appear in the "high" Appalachians. This is disturbing since the usual methods of correcting for bias like inverse-p weighting or spatial thinning would remove signal from its absence in these areas *plus* in areas that are undersampled like Kentucky and Louisiana.', post=2, breaks=80)
 
-		say('So, we are going to remove Louisiana and Kentucky from the training set. This means occurrences from these areas will be be use to train the models, nor will background sites drawn from these areas.', post=2, breaks=80)
+		# say('So, we are going to remove Louisiana and Kentucky from the training set. This means occurrences from these areas will be be use to train the models, nor will background sites drawn from these areas.', post=2, breaks=80)
 
-	### remove occurrences in undersampled areas and in South America
-	#################################################################
+	# ### remove occurrences in undersampled areas and in South America
+	# #################################################################
 	
-		nrowStart <- nrow(occsSpAlb)
-		occsSpAlb <- occsSpAlb[(occsSpAlb@data$country %in% c('Canada', 'United States', 'Mexico')) & !(occsSpAlb@data$state_province %in% undersampled), ]
+		# nrowStart <- nrow(occsSpAlb)
+		# occsSpAlb <- occsSpAlb[(occsSpAlb@data$country %in% c('Canada', 'United States', 'Mexico')) & !(occsSpAlb@data$state_province %in% undersampled), ]
 		
-		sink('./species_records/cleaning_notes_outliers_undersampled.txt', split=TRUE)
-			say('By removing occurrences outside Mexico/US/Canada we reduced the number of occurrences from ', nrowStart, ' to ', nrow(occsSpAlb), '.')
-		sink()
+		# sink('./species_records/cleaning_notes_outliers_undersampled.txt', split=TRUE)
+			# say('By removing occurrences outside Mexico/US/Canada we reduced the number of occurrences from ', nrowStart, ' to ', nrow(occsSpAlb), '.')
+		# sink()
 
-	### correct for hypothesized spatial sampling bias
-	##################################################
+	# ### correct for hypothesized spatial sampling bias
+	# ##################################################
 		
-		say('To remove sampling bias we will spatially thin occurrences so that there is but one occurrence per cell.')
+		# say('To remove sampling bias we will spatially thin occurrences so that there is but one occurrence per cell.')
 
-		# get occurrences in WGS84 CRS
-		priority <- rep(NA, nrow(occsSpAlb))
-		priority[occsSpAlb$observation_type == 'plot'] <- 1
-		priority[occsSpAlb$observation_type == 'specimen'] <- 2
-		priority[occsSpAlb$observation_type == 'trait occurrence'] <- 3
-		priority[occsSpAlb$observation_type == 'human observation'] <- 4
-		priority[occsSpAlb$observation_type == 'unknown'] <- 5
+		# # get occurrences in WGS84 CRS
+		# priority <- rep(NA, nrow(occsSpAlb))
+		# priority[occsSpAlb$observation_type == 'plot'] <- 1
+		# priority[occsSpAlb$observation_type == 'specimen'] <- 2
+		# priority[occsSpAlb$observation_type == 'trait occurrence'] <- 3
+		# priority[occsSpAlb$observation_type == 'human observation'] <- 4
+		# priority[occsSpAlb$observation_type == 'unknown'] <- 5
 		
-		nrowStart <- nrow(occsSpAlb)
-		occsSpAlb <- elimCellDups(occsSpAlb, r=maskRastAlb, priority=priority)
+		# nrowStart <- nrow(occsSpAlb)
+		# occsSpAlb <- elimCellDups(occsSpAlb, r=maskRastAlb, priority=priority)
 
-		sink('./species_records/cleaning_notes_thinning.txt', split=TRUE)
-			say('Through spatial thinning we reduced the number of occurrences from ', nrowStart, ' to ', nrow(occsSpAlb), '.')
-		sink()
+		# sink('./species_records/cleaning_notes_thinning.txt', split=TRUE)
+			# say('Through spatial thinning we reduced the number of occurrences from ', nrowStart, ' to ', nrow(occsSpAlb), '.')
+		# sink()
 		
-		# inspect
-		png('./figures_and_tables/occurrences_thinned_one_per_cell.png', width=1200, height=1000)
+		# # inspect
+		# png('./figures_and_tables/occurrences_thinned_one_per_cell.png', width=1200, height=1000)
 		
-			plot(occsSpAlb, pch=16, cex=1.8, main='All cleaned and thinnned occurrences')
-			plot(nam1SpAlb, add=TRUE, border='gray')
+			# plot(occsSpAlb, pch=16, cex=1.8, main='All cleaned and thinnned occurrences')
+			# plot(nam1SpAlb, add=TRUE, border='gray')
 			
-			title(sub=date(), outer=TRUE, cex.sub=0.7, line=-2)
+			# title(sub=date(), outer=TRUE, cex.sub=0.7, line=-2)
 			
-		dev.off()
+		# dev.off()
 		
-		# save
-		save(occsSpAlb, file=paste0('./species_records/01_', (gsub(tolower(species), pattern=' ', replacement='_')), '_bien_cleaned_occurrences_thinned.rda'))
+		# # save
+		# save(occsSpAlb, file=paste0('./species_records/01_', (gsub(tolower(species), pattern=' ', replacement='_')), '_bien_cleaned_occurrences_thinned.rda'))
 	
-say('##################################', pre=1)
-say('### define calibration regions ###')
-say('##################################', post=2)	
+# say('##################################', pre=1)
+# say('### define calibration regions ###')
+# say('##################################', post=2)	
 	
-	say('Currently, best practices assert that one should model the niche using only data from an area considered accessible to the species over long time. However, in practice this is very difficult to estimate, so we will use buffers of different size (defined above in the "### constants ###" section above).', post=2, breaks=80)
+	# say('Currently, best practices assert that one should model the niche using only data from an area considered accessible to the species over long time. However, in practice this is very difficult to estimate, so we will use buffers of different size (defined above in the "### constants ###" section above).', post=2, breaks=80)
 
-	### load data
+	# ### load data
 	
-	load(paste0('./species_records/01_', gsub(tolower(species), pattern=' ', replacement='_'), '_bien_cleaned_occurrences_thinned.rda'))
+	# load(paste0('./species_records/01_', gsub(tolower(species), pattern=' ', replacement='_'), '_bien_cleaned_occurrences_thinned.rda'))
 	
-	### create buffers
+	# ### create buffers
 	
-	if (!exists('calibRegionsSpAlb')) {
+	# if (!exists('calibRegionsSpAlb')) {
 		
-		# buffer around occurrences
-		calibRegionsSpAlb <- list()
-		for (i in seq_along(exts)) {
-			calibRegionsSpAlb[[i]] <- gBuffer(occsSpAlb, width=exts[i] * 1000)
-		}
+		# # buffer around occurrences
+		# calibRegionsSpAlb <- list()
+		# for (i in seq_along(exts)) {
+			# calibRegionsSpAlb[[i]] <- gBuffer(occsSpAlb, width=exts[i] * 1000)
+		# }
 
-		# crop area outside North America, remove undersampled states, remove Great Lakes
-		undersampledSpAlb <- nam1SpAlb[nam1SpAlb$NAME_1 %in% undersampled, ]
+		# # crop area outside North America, remove undersampled states, remove Great Lakes
+		# undersampledSpAlb <- nam1SpAlb[nam1SpAlb$NAME_1 %in% undersampled, ]
 		
-		for (i in seq_along(exts)) {
-			# calibRegionsSpAlb[[i]] <- gIntersection(calibRegionsSpAlb[[i]], sr) # not doing this because some points outside study region
-			calibRegionsSpAlb[[i]] <- rgeos::gIntersection(calibRegionsSpAlb[[i]], nam0SpAlb)
-			calibRegionsSpAlb[[i]] <- rgeos::gDifference(calibRegionsSpAlb[[i]], undersampledSpAlb, checkValidity=TRUE)
-			calibRegionsSpAlb[[i]] <- rgeos::gDifference(calibRegionsSpAlb[[i]], greatLakesSpAlb, checkValidity=TRUE)
-		}
+		# for (i in seq_along(exts)) {
+			# # calibRegionsSpAlb[[i]] <- gIntersection(calibRegionsSpAlb[[i]], sr) # not doing this because some points outside study region
+			# calibRegionsSpAlb[[i]] <- rgeos::gIntersection(calibRegionsSpAlb[[i]], nam0SpAlb)
+			# calibRegionsSpAlb[[i]] <- rgeos::gDifference(calibRegionsSpAlb[[i]], undersampledSpAlb, checkValidity=TRUE)
+			# calibRegionsSpAlb[[i]] <- rgeos::gDifference(calibRegionsSpAlb[[i]], greatLakesSpAlb, checkValidity=TRUE)
+		# }
 		
-		studyRegionCroppedToPresentSpAlb <- crop(studyRegionSpAlb, nam0SpAlb)
+		# studyRegionCroppedToPresentSpAlb <- crop(studyRegionSpAlb, nam0SpAlb)
 		
-		# inspect
-		png('./figures_and_tables/regions.png', width=1200, height=1000)
+		# # inspect
+		# png('./figures_and_tables/regions.png', width=1200, height=1000)
 
-			par(cex.main=1.4)
-			plot(calibRegionsSpAlb[[length(calibRegionsSpAlb)]], border=NA, col=NA, main='Calibration Regions')
-			plot(studyRegionCroppedToPresentSpAlb, add=TRUE, lwd=0.8, col='khaki1')
+			# par(cex.main=1.4)
+			# plot(calibRegionsSpAlb[[length(calibRegionsSpAlb)]], border=NA, col=NA, main='Calibration Regions')
+			# plot(studyRegionCroppedToPresentSpAlb, add=TRUE, lwd=0.8, col='khaki1')
 			
-			for (i in rev(seq_along(exts))) {
-				plot(calibRegionsSpAlb[[i]], col=paste0('aquamarine', 4 + 1 - i), lwd=0.8, add=TRUE)
-			}
+			# for (i in rev(seq_along(exts))) {
+				# plot(calibRegionsSpAlb[[i]], col=paste0('aquamarine', 4 + 1 - i), lwd=0.8, add=TRUE)
+			# }
 			
-			plot(nam1SpAlb, add=TRUE)
-			points(occsSpAlb, pch=16, cex=1.4)
+			# plot(nam1SpAlb, add=TRUE)
+			# points(occsSpAlb, pch=16, cex=1.4)
 
-			legend <- c('Records', paste('Calibration region:', rev(exts), 'km'), 'Study region (modern)')
-			fill <- c(NA, paste0('aquamarine', 4 + 1 - rev(seq_along(exts))), 'khaki1')
-			pch <- c(16, rep(NA, length(exts)), NA)
-			pt.cex <- c(1.4, rep(NA, length(exts)), NA)
-			border <- c(NA, rep(0.8, length(exts)), 0.8)
-			col <- c('black', rep(NA, length(exts)), NA)
+			# legend <- c('Records', paste('Calibration region:', rev(exts), 'km'), 'Study region (modern)')
+			# fill <- c(NA, paste0('aquamarine', 4 + 1 - rev(seq_along(exts))), 'khaki1')
+			# pch <- c(16, rep(NA, length(exts)), NA)
+			# pt.cex <- c(1.4, rep(NA, length(exts)), NA)
+			# border <- c(NA, rep(0.8, length(exts)), 0.8)
+			# col <- c('black', rep(NA, length(exts)), NA)
 			
-			legend('bottomright',
-				   legend=legend,
-				   fill=fill,
-				   pch=pch,
-				   pt.cex=pt.cex,
-				   border=border,
-				   col=col,
-				   bty='n', cex=1.6
-			)
+			# legend('bottomright',
+				   # legend=legend,
+				   # fill=fill,
+				   # pch=pch,
+				   # pt.cex=pt.cex,
+				   # border=border,
+				   # col=col,
+				   # bty='n', cex=1.6
+			# )
 			
-		dev.off()
+		# dev.off()
 
-		names(calibRegionsSpAlb) <- paste0('bufferAroundOccs_', exts, 'km')
-		save(calibRegionsSpAlb, file='./regions/calibration_regions.rda')
+		# names(calibRegionsSpAlb) <- paste0('bufferAroundOccs_', exts, 'km')
+		# save(calibRegionsSpAlb, file='./regions/calibration_regions.rda')
 		
-	}
+	# }
 
-say('################################', pre=1)
-say('### select climate variables ###')
-say('################################', post=2)
+# say('################################', pre=1)
+# say('### select climate variables ###')
+# say('################################', post=2)
 
-	say('We will be using the paleo climate layers prepared by Lorenz, D.J., Nieto-Lugilde, D., Blois, J.L., Fitzpatrick, M.C., and Williams, J.W.  2016.  Downscaled and debiased climate simulations for North America from 21,000 years ago to 2100 AD.  Scientific Data 3:160048. The DOI of the original data is 10.5061/dryad.1597g. This data set contains future, current, and historical GCM projections. We will be using the current and historical model output from the ECBilt and CCSM GCMs (other models have only current/future projections associated with them). The spatial resolution is 0.5deg for all of North America.', breaks=80, post=2)
+	# say('We will be using the paleo climate layers prepared by Lorenz, D.J., Nieto-Lugilde, D., Blois, J.L., Fitzpatrick, M.C., and Williams, J.W.  2016.  Downscaled and debiased climate simulations for North America from 21,000 years ago to 2100 AD.  Scientific Data 3:160048. The DOI of the original data is 10.5061/dryad.1597g. This data set contains future, current, and historical GCM projections. We will be using the current and historical model output from the ECBilt and CCSM GCMs (other models have only current/future projections associated with them). The spatial resolution is 0.5deg for all of North America.', breaks=80, post=2)
 
-	say('Available variables include min/max temperature, precipitation, growing degree days, AET, PET, ETR (= AET/PET), and WDI (PET - precipitation), summarized across an annual, quarterly, or monthly basis. Variables are projected back to 22 Kybp (CCSM) or 21 Kybp (ECBilt) in 500-yr timeslices. The current period covers averages across 1950-2005. Past climate encompasses averages across 200-yr intervals centered on every 500 yr (e.g., 500 ypb, 1000 ypb, 1500 ypb, etc.).', breaks=80, post=2)
+	# say('Available variables include min/max temperature, precipitation, growing degree days, AET, PET, ETR (= AET/PET), and WDI (PET - precipitation), summarized across an annual, quarterly, or monthly basis. Variables are projected back to 22 Kybp (CCSM) or 21 Kybp (ECBilt) in 500-yr timeslices. The current period covers averages across 1950-2005. Past climate encompasses averages across 200-yr intervals centered on every 500 yr (e.g., 500 ypb, 1000 ypb, 1500 ypb, etc.).', breaks=80, post=2)
 	
-	say('We will *not* use variable "an_cv_ETR" because it has NAs in Canada during the present in large portions of Canada (and possibly through time).', breaks=80, post=2)
-	say('We will *not* use variable "an_cv_WDI" because it has some very extreme values in just a few cells in Mexico at 0 ybp (and possibly through time).', breaks=80, post=2)
+	# say('We will *not* use variable "an_cv_ETR" because it has NAs in Canada during the present in large portions of Canada (and possibly through time).', breaks=80, post=2)
+	# say('We will *not* use variable "an_cv_WDI" because it has some very extreme values in just a few cells in Mexico at 0 ybp (and possibly through time).', breaks=80, post=2)
 	
-	say('Tasks to complete include:')
-	say('* Selecting variables.')
-	say('* Cropping/masking rasters to study region *extent* (versus the areas within the study region).')
-	say('* Interpolating rasters to 30-yr intervals (approximate generation time for green ash).')
+	# say('Tasks to complete include:')
+	# say('* Selecting variables.')
+	# say('* Cropping/masking rasters to study region *extent* (versus the areas within the study region).')
+	# say('* Interpolating rasters to 30-yr intervals (approximate generation time for green ash).')
 
-	say('### select variables', level=2)
-	####################################
+	# say('### select variables', level=2)
+	# ####################################
 		
-		calibRegionBroadestSp <- calibRegionsSpAlb[[paste0('bufferAroundOccs_', max(exts), 'km')]]
+		# calibRegionBroadestSp <- calibRegionsSpAlb[[paste0('bufferAroundOccs_', max(exts), 'km')]]
 		
-		### get set of randomly located points for assessing collinearity between variables
+		# ### get set of randomly located points for assessing collinearity between variables
 		
-		climCcsm_0ypb <- raster::stack(listFiles('D:/Ecology/Climate/Lorenz et al 2016 North America 21Kybp to 2100 CE/V2/ccsm3_22-0k_all_tifs/0BP', pattern='an_'))
-		climEcbilt_0ypb <- raster::stack(listFiles('D:/Ecology/Climate/Lorenz et al 2016 North America 21Kybp to 2100 CE/V2/ecbilt_21-0k_all_tifs/0BP', pattern='an_'))
+		# climCcsm_0ypb <- raster::stack(listFiles('D:/Ecology/Climate/Lorenz et al 2016 North America 21Kybp to 2100 CE/V2/ccsm3_22-0k_all_tifs/0BP', pattern='an_'))
+		# climEcbilt_0ypb <- raster::stack(listFiles('D:/Ecology/Climate/Lorenz et al 2016 North America 21Kybp to 2100 CE/V2/ecbilt_21-0k_all_tifs/0BP', pattern='an_'))
 		
-		# remove an_cv_ETR and an_cv_WDI
-		keeps <- names(climCcsm_0ypb)[-which(names(climCcsm_0ypb) %in% c('an_cv_ETR', 'an_cv_WDI'))]
-		climCcsm_0ypb <- subset(climCcsm_0ypb, keeps)
-		climEcbilt_0ypb <- subset(climEcbilt_0ypb, keeps)
+		# # remove an_cv_ETR and an_cv_WDI
+		# keeps <- names(climCcsm_0ypb)[-which(names(climCcsm_0ypb) %in% c('an_cv_ETR', 'an_cv_WDI'))]
+		# climCcsm_0ypb <- subset(climCcsm_0ypb, keeps)
+		# climEcbilt_0ypb <- subset(climEcbilt_0ypb, keeps)
 		
-		maskBroad0ypb <- rasterize(calibRegionBroadestSp, climCcsm_0ypb[[1]])
+		# maskBroad0ypb <- rasterize(calibRegionBroadestSp, climCcsm_0ypb[[1]])
 		
-		randBg <- randomPoints(maskBroad0ypb, 11000)
-		randBg <- as.data.frame(randBg)
-		names(randBg) <- ll
+		# randBg <- randomPoints(maskBroad0ypb, 11000)
+		# randBg <- as.data.frame(randBg)
+		# names(randBg) <- ll
 		
-		envCcsm_0ybp <- extract(climCcsm_0ypb, randBg)
-		envEcbilt_0ybp <- extract(climEcbilt_0ypb, randBg)
+		# envCcsm_0ybp <- extract(climCcsm_0ypb, randBg)
+		# envEcbilt_0ybp <- extract(climEcbilt_0ypb, randBg)
 
-		completeCases <- complete.cases(envCcsm_0ybp) & complete.cases(envEcbilt_0ybp)
+		# completeCases <- complete.cases(envCcsm_0ybp) & complete.cases(envEcbilt_0ybp)
 		
-		randBg <- randBg[completeCases, ]
-		randBg <- randBg[1:max(nrow(randBg), 10000), ]
-		envCcsm_0ybp <- envCcsm_0ybp[completeCases, ]
-		envEcbilt_0ybp <- envEcbilt_0ybp[completeCases, ]
+		# randBg <- randBg[completeCases, ]
+		# randBg <- randBg[1:max(nrow(randBg), 10000), ]
+		# envCcsm_0ybp <- envCcsm_0ybp[completeCases, ]
+		# envEcbilt_0ybp <- envEcbilt_0ybp[completeCases, ]
 		
-		env <- rbind(envCcsm_0ybp, envEcbilt_0ybp)
+		# env <- rbind(envCcsm_0ybp, envEcbilt_0ybp)
 		
-		env <- as.data.frame(env)
-		envScaled <- scale(env)
-		variableSel <- usdm::vifcor(envScaled, maxCor, maxobservations=Inf)
+		# env <- as.data.frame(env)
+		# envScaled <- scale(env)
+		# variableSel <- usdm::vifcor(envScaled, maxCor, maxobservations=Inf)
 
-		sink('./figures_and_tables/variable_selection.txt', split=TRUE)
+		# sink('./figures_and_tables/variable_selection.txt', split=TRUE)
 		
-			say('Based on a threshold maximum correlation of ', maxCor, ' and VIF, we will use the following variables:')
-			print(variableSel)
+			# say('Based on a threshold maximum correlation of ', maxCor, ' and VIF, we will use the following variables:')
+			# print(variableSel)
 			
-		sink()
+		# sink()
 		
-		predictors <- variableSel@results$Variables
-		save(predictors, file='./figures_and_tables/predictors.rda')
+		# predictors <- variableSel@results$Variables
+		# save(predictors, file='./figures_and_tables/predictors.rda')
 		
-	say('calculate statistics for rescaling rasters from present-day rasters', level=2)
-	###################################################################################
+	# say('calculate statistics for rescaling rasters from present-day rasters', level=2)
+	# ###################################################################################
 		
-		# saves statistics on each variable (min/max/etc)
-		variableStats <- data.frame()
-		
-		for (gcm in gcms) {
-		
-			rasts <- getClimRasts(gcm=gcm, year=0, variables=predictors, rescale = FALSE)
-			mins <- minValue(rasts)
-			maxs <- maxValue(rasts)
-			
-			# remember
-			variableStats <- rbind(
-				variableStats,
-				data.frame(
-					gcm = gcm,
-					variable = predictors,
-					min = mins,
-					max = maxs
-				)
-			)
-	
-		} # next GCM
-				
-		write.csv(variableStats, './environmental_rasters/lorenz_et_al_2016/variable_statistics_0bp_across_north_america.csv', row.names=FALSE)
-
-say('###########################################', pre=1)
-say('### collate calibration/evaluation data ###')
-say('###########################################', post=2)
-
-	say('In this step we will:')
-	say('* Extract environmental data.')
-	say('* Locate background sites.')
-	say('* Define geographically distinct cross-validation folds for model evaluation.')
-
-	calibRegionsSp <- calibRegionsSpAlb
-	for (i in seq_along(calibRegionsSp)) {
-		calibRegionsSp[[i]] <- sp::spTransform(calibRegionsSp[[i]], getCRS('wgs84', TRUE))
-	}
-	
-	load(paste0('./species_records/01_', gsub(tolower(species), pattern=' ', replacement='_'), '_bien_cleaned_occurrences_thinned.rda'))
-	
-		occsSp <- sp::spTransform(occsSpAlb, getCRS('wgs84', TRUE))
-	
-	say('extract environmental data', level=2)
-	##########################################
-
-		# by GCM
-		for (gcm in gcms) {
-
-			if (exists('rasts', inherits=FALSE)) rm(rasts)
-		
-			# get current version of each variable raster
-			rasts <- getClimRasts(gcm=gcm, year=0, variables=predictors, rescale=TRUE, fillCoasts=TRUE)
-			areas <- area(rasts[[1]])
-
-			# extract
-			env <- raster::extract(rasts, occsSp)
-			env <- as.data.frame(env)
-			
-			thisArea <- raster::extract(areas, occsSp)
-			thisArea <- as.data.frame(thisArea)
-			names(thisArea) <- 'cellArea_km2'
-				
-			thisEnv <- cbind(thisArea, env)
-			
-			# remember
-			occsSpAlb@data <- cbind(occsSpAlb@data, thisEnv)
-			
-		} # next GCM
-		
-		# remove occurrences with incomplete environmental data
-		vars <- character()
-		for (gcm in gcms) vars <- c(vars, paste0(gcm, '_', predictors))
-		noNas <- complete.cases(occsSpAlb@data[ , vars])
-		occsSpAlb <- occsSpAlb[noNas, ]
-
-	say('generate test background sites', level=2)
-	##############################################
-	
-		calibRegionSpAlb <- calibRegionsSpAlb[[paste0('bufferAroundOccs_', max(exts), 'km')]]
-		
-		# get random background sites
-		bgTestSpAlb <- spsample(calibRegionSpAlb, n=11000, type='random', iter=10)
-		bgTestSp <- sp::spTransform(bgTestSpAlb, getCRS('wgs84', TRUE))
-		bgTest <- as.data.frame(coordinates(bgTestSp))
-		names(bgTest) <- ll
-		
-		if (exists('env')) rm(env)
-
-		# by GCM
-		for (gcm in gcms) {
-
-			# get current version of each variable raster
-			rasts <- getClimRasts(gcm=gcm, year=0, variables=predictors, rescale=TRUE, fillCoasts=TRUE)
-			areas <- area(rasts[[1]])
-
-			# extract
-			thisEnv <- raster::extract(rasts, bgTest)
-			thisEnv <- as.data.frame(thisEnv)
-			
-			thisArea <- raster::extract(areas, bgTest)
-			thisArea <- as.data.frame(thisArea)
-			names(thisArea) <- 'cellArea_km2'
-			
-			thisEnv <- cbind(thisArea, thisEnv)
-			
-			# remember
-			env <- if (exists('env', inherits=FALSE)) {
-				cbind(env, thisEnv)
-			} else {
-				thisEnv
-			}
-			
-		} # next GCM
-
-		# cull NA cases
-		bgTest <- cbind(bgTest, env)
-		bgTest <- bgTest[complete.cases(bgTest), ]
-		bgTest <- bgTest[1:min(nrow(bgTest), 10000), ]
-			
-	say('generate training background sites', level=2)
-	##################################################
-
-		for (countExt in seq_along(exts)) {
-				
-			ext <- exts[countExt]
-			calibRegionSpAlb <- calibRegionsSpAlb[[countExt]]
-			
-			# get random background sites
-			bgCalibSpAlb <- spsample(calibRegionSpAlb, n=11000, type='random', iter=10)
-			bgCalibSp <- sp::spTransform(bgCalibSpAlb, getCRS('wgs84', TRUE))
-			bgCalib <- as.data.frame(coordinates(bgCalibSp))
-			names(bgCalib) <- ll
-			
-			if (exists('env')) rm(env)
-
-			# by GCM
-			for (gcm in gcms) {
-
-				# get current version of each variable raster
-				rasts <- getClimRasts(gcm=gcm, year=0, variables=predictors, rescale=TRUE, fillCoasts=TRUE)
-				areas <- area(rasts[[1]])
-
-				# extract
-				thisEnv <- raster::extract(rasts, bgCalib)
-				thisEnv <- as.data.frame(thisEnv)
-				
-				thisArea <- raster::extract(areas, bgCalib)
-				thisArea <- as.data.frame(thisArea)
-				names(thisArea) <- 'cellArea_km2'
-				
-				thisEnv <- cbind(thisArea, thisEnv)
-				
-				# remember
-				env <- if (exists('env', inherits=FALSE)) {
-					cbind(env, thisEnv)
-				} else {
-					thisEnv
-				}
-				
-			} # next GCM
-
-			# cull NA cases
-			bgCalib <- cbind(bgCalib, env)
-			bgCalib <- bgCalib[complete.cases(bgCalib), ]
-			bgCalib <- bgCalib[1:min(nrow(bgCalib), 10000), ]
-			
-			# remember
-			assign(paste0('bgCalib_extent', exts[countExt], 'km'), bgCalib)
-			
-		} # next calibration region
-
-	say('assign spatially exclusive training/calibration/evaluation cross-validation folds', level=2)
-	#################################################################################################
-		
-		bgTestSp <- SpatialPoints(bgTest[ , ll], getCRS('wgs84', TRUE))
-		bgTestSpAlb <- sp::spTransform(bgTestSp, getCRS('albersNA', TRUE))
-		
-		blockRast <- rastWithSquareCells(studyRegionCroppedToPresentSpAlb, res=foldBuffer_m)
-
-		# create folds based on occurrences such that there is at least a minimum number of occurrences per fold
-		minNumInFold <- -Inf
-		numFolds <- 50
-		maxTries <- 20
-		tries <- 1
-		
-		while (minNumInFold < minFoldSize) {
-		
-			values(blockRast) <- sample(1:numFolds, ncell(blockRast), replace=TRUE)
-			folds <- extract(blockRast, occsSpAlb)
-			minNumInFold <- min(table(folds))
-			
-			tries <- tries + 1
-			if (tries == maxTries) {
-				tries <- 1
-				numFolds <- numFolds - 1
-			}
-			
-		}
-	
-		say('Final number of folds: ', numFolds)
-		
-		occs <- occsSpAlb@data
-		folds <- data.frame(fold=folds)
-		occs <- cbind(occs, folds)
-		
-		# assign folds to test background sites
-		bgTestSp <- SpatialPointsDataFrame(bgTest[ , ll], data=bgTest, proj4string=getCRS('wgs84', TRUE))
-		bgTestSpAlb <- sp::spTransform(bgTestSp, getCRS('albersNA', TRUE))
-		bgTestFolds <- extract(blockRast, bgTestSpAlb)
-		bgTestSpAlb$fold <- bgTestFolds
-		bgTest <- bgTestSpAlb@data
-		
-		# assign folds to calibration background sites
-		for (ext in exts) {
-		
-			x <- get(paste0('bgCalib_extent', ext, 'km'))
-			xSp <- SpatialPointsDataFrame(x[ , ll], data=x, proj4string=getCRS('wgs84', TRUE))
-			xSpAlb <- sp::spTransform(xSp, getCRS('albersNA', TRUE))
-			bgCalibFolds <- extract(blockRast, xSpAlb)
-			x$fold <- bgCalibFolds
-			x <- as.data.frame(x)
-			
-			assign(paste0('bgCalib_extent', ext, 'km'), x)
-			
-		}
-
-	say('collate calibration and evaluation	occurrences and background sites', level=2)
-	##################################################################################
-	
-		occsBg <- list()
-		occsBg$note <- 'This list object contains spatially thinned occurrence data and associated background sites. $testBg is a set of background sites drawn from the largest training region extent. $calibEvalOccsBg[[i]] is a list of lists, one per training region extent. Each sublist has two data frames. $calibEvalOccsBg[[i]]occsBg is a data frame representing calibration occurrences and background sites. Weights are 1 for occurrences and a fractional value for background sites such that their combined weight is equal to the total weight of occurrences. Folds are geographically exclusive and comprise a set of intermingled spatial blocks. $calibEvalOccsBg[[i]]$folds is a data frame with one row per row in $calibEvalOccsBg[[i]]$occsBg and one column per fold. Values in each column are 1 (training data), 2 (calibration data), or NA (masked... these represent evaluation data censored from the training and calibration sets).'
-		
-		occsBg$meta <- data.frame(
-			item = c(
-				'numOccs',
-				'numFolds',
-				'minFoldSize_numOccs'
-			),
-			value = c(
-				nrow(occs),
-				numFolds,
-				minFoldSize
-			)
-		)
-		
-		columnsJustBg <- c('fold', ll, 'cellArea_km2', paste0(rep(gcms, each=length(predictors)), '_', predictors))
-		columnsOccsAndBg <- c('presBg', 'fold', 'weight', ll, 'cellArea_km2', paste0(rep(gcms, each=length(predictors)), '_', predictors))
-		
-		occsBg$allOccsThinned <- occs
-		occsBg$testBg <- bgTest[ , columnsJustBg]
-		occsBg$calibEvalOccsBg <- list()
-		
-		for (countExents in seq_along(exts)) {
-		
-			ext <- exts[countExents]
-		
-			# collate occurrences and background sites
-			thisOccs <- occs
-			thisOccs$presBg <- 1
-			thisOccs$weight <- 1
-			thisOccs <- thisOccs[ , columnsOccsAndBg]
-			
-			thisBg <- get(paste0('bgCalib_extent', ext, 'km'))
-			thisBg$presBg <- 0
-			thisBg$weight <- nrow(thisOccs) / nrow(thisBg)
-			thisBg <- thisBg[ , columnsOccsAndBg]
-			
-			thisOccsBg <- rbind(thisOccs, thisBg)
-			
-			# make matrix indicating which occurrences/background sites are in which fold set
-			if (exists('folds')) rm(folds)
-			
-			for (calibFold in 1:numFolds) {
-			
-				for (evalFold in (1:numFolds)[-calibFold]) {
-			
-					designation <- rep(1, nrow(thisOccsBg)) # start with all training
-					designation[thisOccsBg$fold == calibFold] <- 2 # calibration folds
-					designation[thisOccsBg$fold == evalFold] <- NA # mask evaluation folds
-					
-					designation <- matrix(designation, ncol=1)
-					colnames(designation) <- paste0('calib', calibFold, '_vs_eval', evalFold)
-					
-					folds <- if (exists('folds')) {
-						cbind(folds, designation)
-					} else {
-						designation
-					}
-			
-				}
-			
-			}
-			
-			occsBg$calibEvalOccsBg[[countExents]] <- list()
-			occsBg$calibEvalOccsBg[[countExents]]$occsBg <- thisOccsBg
-			occsBg$calibEvalOccsBg[[countExents]]$folds <- folds
-		
-		}
-		
-		names(occsBg$calibEvalOccsBg) <- paste0('occsBg_extent', exts, 'km')
-	
-		### make a map of calibration/evaluation sites
-
-		calibFold <- 1
-		evalFold <- 2
-		cex <- 0.6
-		pch <- 3
-
-		png('./figures_and_tables/example_of_training_calibration_evaluation_folds.png', width=1800, height=600)
-		
-			par(mfrow=c(1, 3), oma=rep(0, 4), cex.main=2.2)
-			
-			plot(studyRegionCroppedToPresentSpAlb, main=('Training, calibration,\nand evaluation occurrences'))
-			x <- occsBg$calibEvalOccsBg[[1]]$occsBg
-			x <- x[x$presBg == 1, ]
-			x <- SpatialPointsDataFrame(x[ , ll], data=x, proj4string=getCRS('wgs84', TRUE))
-			x <- sp::spTransform(x, getCRS('albersNA', TRUE))
-			points(x, pch=pch, cex=cex)
-			points(x[x$fold==calibFold, ], pch=pch, cex=cex, col='cyan')
-			points(x[x$fold==evalFold, ], pch=pch, cex=cex, col='magenta')
-			
-			legend('bottomright', inset=0.1, legend=c('Training', 'Calibration', 'Evaluation'), pch=pch, cex=2.2, col=c('black', 'cyan', 'magenta'), bty='n')
-			
-			plot(studyRegionCroppedToPresentSpAlb, main=('Training and calibration\nbackground sites (narrowest extent)'))
-			x <- occsBg$calibEvalOccsBg[[1]]$occsBg
-			x <- x[x$presBg == 0, ]
-			x <- SpatialPointsDataFrame(x[ , ll], data=x, proj4string=getCRS('wgs84', TRUE))
-			x <- sp::spTransform(x, getCRS('albersNA', TRUE))
-			points(x, pch=pch, cex=cex)
-			points(x[x$fold==calibFold, ], pch=pch, cex=cex, col='cyan')
-			
-			plot(studyRegionCroppedToPresentSpAlb, main=('Evaluation background sites'))
-			x <- occsBg$testBg
-			x <- SpatialPointsDataFrame(x[ , ll], data=x, proj4string=getCRS('wgs84', TRUE))
-			x <- sp::spTransform(x, getCRS('albersNA', TRUE))
-			points(x, pch=pch, cex=cex)
-			points(x[x$fold==evalFold, ], pch=pch, cex=cex, col='magenta')
-			
-		dev.off()
-		
-		save(occsBg, file='./species_records/02_fraxinus_pennsylvanica', gsub(tolower(species), pattern=' ', replacement='_'), '_collated_occurrence_and_background_sites.rda')
-		
-# say('########################')
-# say('### calibrate models ###')
-# say('########################')
-
-	# say('Note that the BRTs and GLMs use weighted calibration occurrences sites while MaxEnt does not. LOO calibration statistics are calculated for all models using weighted occurrences.  Background sites have weights equal to one another with the sum of weights such that it equals the weight of all occurrences.', breaks=80)
-
-	# load(paste0('./species_records/02_', gsub(species, pattern=' ', replacement='_'), '_occurrences_background_env_kFolds_broad.rda'))
-	# load(paste0('./species_records/02_', gsub(species, pattern=' ', replacement='_'), '_occurrences_background_env_kFolds_narrow.rda'))
-
-	# metrics = c('logLossEqualWeight')
-	
-	# # for (ext in exts) {
-	# # for (ext in exts[1]) { # broad
-	# for (ext in exts[2]) { # narrow
-
-		# # collate data
-		# data <- get(paste0('occsBg', ext))
-		# rownames(data) <- 1:nrow(data)
-		# vars1and2 <- c(paste0('ccsm_', predictors), paste0('ecbilt_', predictors))
-		# data <- data[complete.cases(data[ , vars1and2]), ]
-		# data$presBg <- as.numeric(data$presBg)
-		# folds <- data[ , grepl(names(data), pattern='fold')]
-		# weight <- data$weight
-
-		# # subsample folds to make modeling feasible
-		# set.seed(123)
-		# useFolds <- sort(sample(1:ncol(folds), round(0.2 * ncol(folds))))
-		# folds <- folds[ , useFolds]
+		# # saves statistics on each variable (min/max/etc)
+		# variableStats <- data.frame()
 		
 		# for (gcm in gcms) {
-		# # for (gcm in gcms[1]) { # ccsm
-		# # for (gcm in gcms[2]) { # ecbilt
-
-			# vars <- paste0(gcm, '_', predictors)
+		
+			# rasts <- getClimRasts(gcm=gcm, year=0, variables=predictors, rescale = FALSE)
+			# mins <- minValue(rasts)
+			# maxs <- maxValue(rasts)
 			
-# source('C:/Ecology/Drive/R/enmSdm/R/trainByCrossValid.r')
-# # vars <- vars[1:2]
+			# # remember
+			# variableStats <- rbind(
+				# variableStats,
+				# data.frame(
+					# gcm = gcm,
+					# variable = predictors,
+					# min = mins,
+					# max = maxs
+				# )
+			# )
+	
+		# } # next GCM
+				
+		# write.csv(variableStats, './environmental_rasters/lorenz_et_al_2016/variable_statistics_0bp_across_north_america.csv', row.names=FALSE)
 
-			# # # GLM
-			# # algo <- 'glm'
-			# # say(gcm, ' ', ext, ' tuning with ', algo, level=2)
-			# # calib <- trainByCrossValid(data=data, resp='presBg', preds=vars, folds=folds, trainFx=trainGlm, metrics=metrics, w=weight, na.rm=TRUE, out='tuning', verbose=Inf)
-			# # save(calib, file=paste0('./models/loo_calibration_for_', tolower(ext), '_extent_with_', algo, '_', gcm, '_gcm.rda'))
+# say('###########################################', pre=1)
+# say('### collate calibration/evaluation data ###')
+# say('###########################################', post=2)
 
-			# # # MaxEnt
-			# # algo <- 'maxent'
-			# # say(gcm, ' ', ext, ' tuning with ', algo, level=2)
-			# # calib <- trainByCrossValid(data=data, resp='presBg', preds=vars, folds=folds, trainFx=trainMaxEnt, metrics=metrics, w=weight, na.rm=TRUE, out='tuning', jackknife=FALSE, scratchDir='D:/ecology/!Scratch/_temp', cores=4)
-			# # save(calib, file=paste0('./models/loo_calibration_for_', tolower(ext), '_extent_with_', algo, '_', gcm, '_gcm.rda'))
+	# say('In this step we will:')
+	# say('* Extract environmental data.')
+	# say('* Locate background sites.')
+	# say('* Define geographically distinct cross-validation folds for model evaluation.')
 
-			# # BRTs
-			# algo <- 'brt'
-			# say(gcm, ' ', ext, ' tuning with ', algo, level=2)
-			# calib <- trainByCrossValid(data=data, resp='presBg', preds=vars, folds=folds, trainFx=trainBrt, metrics=metrics, w=weight, na.rm=TRUE, cores=4, out='tuning', maxTrees=8000)
-			# save(calib, file=paste0('./models/loo_calibration_for_', tolower(ext), '_extent_with_', algo, '_', gcm, '_gcm.rda'))
+	# calibRegionsSp <- calibRegionsSpAlb
+	# for (i in seq_along(calibRegionsSp)) {
+		# calibRegionsSp[[i]] <- sp::spTransform(calibRegionsSp[[i]], getCRS('wgs84', TRUE))
+	# }
+	
+	# load(paste0('./species_records/01_', gsub(tolower(species), pattern=' ', replacement='_'), '_bien_cleaned_occurrences_thinned.rda'))
+	
+		# occsSp <- sp::spTransform(occsSpAlb, getCRS('wgs84', TRUE))
+	
+	# say('extract environmental data', level=2)
+	# ##########################################
+
+		# # by GCM
+		# for (gcm in gcms) {
+
+			# if (exists('rasts', inherits=FALSE)) rm(rasts)
+		
+			# # get current version of each variable raster
+			# rasts <- getClimRasts(gcm=gcm, year=0, variables=predictors, rescale=TRUE, fillCoasts=TRUE)
+			# areas <- area(rasts[[1]])
+
+			# # extract
+			# env <- raster::extract(rasts, occsSp)
+			# env <- as.data.frame(env)
+			
+			# thisArea <- raster::extract(areas, occsSp)
+			# thisArea <- as.data.frame(thisArea)
+			# names(thisArea) <- 'cellArea_km2'
+				
+			# thisEnv <- cbind(thisArea, env)
+			
+			# # remember
+			# occsSpAlb@data <- cbind(occsSpAlb@data, thisEnv)
 			
 		# } # next GCM
+		
+		# # remove occurrences with incomplete environmental data
+		# vars <- character()
+		# for (gcm in gcms) vars <- c(vars, paste0(gcm, '_', predictors))
+		# noNas <- complete.cases(occsSpAlb@data[ , vars])
+		# occsSpAlb <- occsSpAlb[noNas, ]
+
+	# say('generate test background sites', level=2)
+	# ##############################################
+	
+		# calibRegionSpAlb <- calibRegionsSpAlb[[paste0('bufferAroundOccs_', max(exts), 'km')]]
+		
+		# # get random background sites
+		# bgTestSpAlb <- spsample(calibRegionSpAlb, n=11000, type='random', iter=10)
+		# bgTestSp <- sp::spTransform(bgTestSpAlb, getCRS('wgs84', TRUE))
+		# bgTest <- as.data.frame(coordinates(bgTestSp))
+		# names(bgTest) <- ll
+		
+		# if (exists('env')) rm(env)
+
+		# # by GCM
+		# for (gcm in gcms) {
+
+			# # get current version of each variable raster
+			# rasts <- getClimRasts(gcm=gcm, year=0, variables=predictors, rescale=TRUE, fillCoasts=TRUE)
+			# areas <- area(rasts[[1]])
+
+			# # extract
+			# thisEnv <- raster::extract(rasts, bgTest)
+			# thisEnv <- as.data.frame(thisEnv)
 			
-	# } # next extent
+			# thisArea <- raster::extract(areas, bgTest)
+			# thisArea <- as.data.frame(thisArea)
+			# names(thisArea) <- 'cellArea_km2'
+			
+			# thisEnv <- cbind(thisArea, thisEnv)
+			
+			# # remember
+			# env <- if (exists('env', inherits=FALSE)) {
+				# cbind(env, thisEnv)
+			# } else {
+				# thisEnv
+			# }
+			
+		# } # next GCM
+
+		# # cull NA cases
+		# bgTest <- cbind(bgTest, env)
+		# bgTest <- bgTest[complete.cases(bgTest), ]
+		# bgTest <- bgTest[1:min(nrow(bgTest), 10000), ]
+			
+	# say('generate training background sites', level=2)
+	# ##################################################
+
+		# for (countExt in seq_along(exts)) {
+				
+			# ext <- exts[countExt]
+			# calibRegionSpAlb <- calibRegionsSpAlb[[countExt]]
+			
+			# # get random background sites
+			# bgCalibSpAlb <- spsample(calibRegionSpAlb, n=11000, type='random', iter=10)
+			# bgCalibSp <- sp::spTransform(bgCalibSpAlb, getCRS('wgs84', TRUE))
+			# bgCalib <- as.data.frame(coordinates(bgCalibSp))
+			# names(bgCalib) <- ll
+			
+			# if (exists('env')) rm(env)
+
+			# # by GCM
+			# for (gcm in gcms) {
+
+				# # get current version of each variable raster
+				# rasts <- getClimRasts(gcm=gcm, year=0, variables=predictors, rescale=TRUE, fillCoasts=TRUE)
+				# areas <- area(rasts[[1]])
+
+				# # extract
+				# thisEnv <- raster::extract(rasts, bgCalib)
+				# thisEnv <- as.data.frame(thisEnv)
+				
+				# thisArea <- raster::extract(areas, bgCalib)
+				# thisArea <- as.data.frame(thisArea)
+				# names(thisArea) <- 'cellArea_km2'
+				
+				# thisEnv <- cbind(thisArea, thisEnv)
+				
+				# # remember
+				# env <- if (exists('env', inherits=FALSE)) {
+					# cbind(env, thisEnv)
+				# } else {
+					# thisEnv
+				# }
+				
+			# } # next GCM
+
+			# # cull NA cases
+			# bgCalib <- cbind(bgCalib, env)
+			# bgCalib <- bgCalib[complete.cases(bgCalib), ]
+			# bgCalib <- bgCalib[1:min(nrow(bgCalib), 10000), ]
+			
+			# # remember
+			# assign(paste0('bgCalib_extent', exts[countExt], 'km'), bgCalib)
+			
+		# } # next calibration region
+
+	# say('assign spatially exclusive training/calibration/evaluation cross-validation folds', level=2)
+	# #################################################################################################
+		
+		# bgTestSp <- SpatialPoints(bgTest[ , ll], getCRS('wgs84', TRUE))
+		# bgTestSpAlb <- sp::spTransform(bgTestSp, getCRS('albersNA', TRUE))
+		
+		# blockRast <- rastWithSquareCells(studyRegionCroppedToPresentSpAlb, res=foldBuffer_m)
+
+		# # create folds based on occurrences such that there is at least a minimum number of occurrences per fold
+		# minNumInFold <- -Inf
+		# numFolds <- 50
+		# maxTries <- 20
+		# tries <- 1
+		
+		# while (minNumInFold < minFoldSize) {
+		
+			# values(blockRast) <- sample(1:numFolds, ncell(blockRast), replace=TRUE)
+			# folds <- extract(blockRast, occsSpAlb)
+			# minNumInFold <- min(table(folds))
+			
+			# tries <- tries + 1
+			# if (tries == maxTries) {
+				# tries <- 1
+				# numFolds <- numFolds - 1
+			# }
+			
+		# }
+	
+		# say('Final number of folds: ', numFolds)
+		
+		# occs <- occsSpAlb@data
+		# folds <- data.frame(fold=folds)
+		# occs <- cbind(occs, folds)
+		
+		# # assign folds to test background sites
+		# bgTestSp <- SpatialPointsDataFrame(bgTest[ , ll], data=bgTest, proj4string=getCRS('wgs84', TRUE))
+		# bgTestSpAlb <- sp::spTransform(bgTestSp, getCRS('albersNA', TRUE))
+		# bgTestFolds <- extract(blockRast, bgTestSpAlb)
+		# bgTestSpAlb$fold <- bgTestFolds
+		# bgTest <- bgTestSpAlb@data
+		
+		# # assign folds to calibration background sites
+		# for (ext in exts) {
+		
+			# x <- get(paste0('bgCalib_extent', ext, 'km'))
+			# xSp <- SpatialPointsDataFrame(x[ , ll], data=x, proj4string=getCRS('wgs84', TRUE))
+			# xSpAlb <- sp::spTransform(xSp, getCRS('albersNA', TRUE))
+			# bgCalibFolds <- extract(blockRast, xSpAlb)
+			# x$fold <- bgCalibFolds
+			# x <- as.data.frame(x)
+			
+			# assign(paste0('bgCalib_extent', ext, 'km'), x)
+			
+		# }
+
+	# say('collate calibration and evaluation	occurrences and background sites', level=2)
+	# ##################################################################################
+	
+		# occsBg <- list()
+		# occsBg$note <- 'This list object contains spatially thinned occurrence data and associated background sites. $testBg is a set of background sites drawn from the largest training region extent. $calibEvalOccsBg[[i]] is a list of lists, one per training region extent. Each sublist has two data frames. $calibEvalOccsBg[[i]]occsBg is a data frame representing calibration occurrences and background sites. Weights are 1 for occurrences and a fractional value for background sites such that their combined weight is equal to the total weight of occurrences. Folds are geographically exclusive and comprise a set of intermingled spatial blocks. $calibEvalOccsBg[[i]]$folds is a data frame with one row per row in $calibEvalOccsBg[[i]]$occsBg and one column per fold. Values in each column are 1 (training data), 2 (calibration data), or NA (masked... these represent evaluation data censored from the training and calibration sets).'
+		
+		# occsBg$meta <- data.frame(
+			# item = c(
+				# 'numOccs',
+				# 'numFolds',
+				# 'minFoldSize_numOccs'
+			# ),
+			# value = c(
+				# nrow(occs),
+				# numFolds,
+				# minFoldSize
+			# )
+		# )
+		
+		# columnsJustBg <- c('fold', ll, 'cellArea_km2', paste0(rep(gcms, each=length(predictors)), '_', predictors))
+		# columnsOccsAndBg <- c('presBg', 'fold', 'weight', ll, 'cellArea_km2', paste0(rep(gcms, each=length(predictors)), '_', predictors))
+		
+		# occsBg$allOccsThinned <- occs
+		# occsBg$testBg <- bgTest[ , columnsJustBg]
+		# occsBg$calibEvalOccsBg <- list()
+		
+		# for (countExents in seq_along(exts)) {
+		
+			# ext <- exts[countExents]
+		
+			# # collate occurrences and background sites
+			# thisOccs <- occs
+			# thisOccs$presBg <- 1
+			# thisOccs$weight <- 1
+			# thisOccs <- thisOccs[ , columnsOccsAndBg]
+			
+			# thisBg <- get(paste0('bgCalib_extent', ext, 'km'))
+			# thisBg$presBg <- 0
+			# thisBg$weight <- nrow(thisOccs) / nrow(thisBg)
+			# thisBg <- thisBg[ , columnsOccsAndBg]
+			
+			# thisOccsBg <- rbind(thisOccs, thisBg)
+			
+			# # make matrix indicating which occurrences/background sites are in which fold set
+			# if (exists('folds')) rm(folds)
+			
+			# for (calibFold in 1:numFolds) {
+			
+				# for (evalFold in (1:numFolds)[-calibFold]) {
+			
+					# designation <- rep(1, nrow(thisOccsBg)) # start with all training
+					# designation[thisOccsBg$fold == calibFold] <- 2 # calibration folds
+					# designation[thisOccsBg$fold == evalFold] <- NA # mask evaluation folds
+					
+					# designation <- matrix(designation, ncol=1)
+					# colnames(designation) <- paste0('calib', calibFold, '_vs_eval', evalFold)
+					
+					# folds <- if (exists('folds')) {
+						# cbind(folds, designation)
+					# } else {
+						# designation
+					# }
+			
+				# }
+			
+			# }
+			
+			# occsBg$calibEvalOccsBg[[countExents]] <- list()
+			# occsBg$calibEvalOccsBg[[countExents]]$occsBg <- thisOccsBg
+			# occsBg$calibEvalOccsBg[[countExents]]$folds <- folds
+		
+		# }
+		
+		# names(occsBg$calibEvalOccsBg) <- paste0('occsBg_extent', exts, 'km')
+	
+		# ### make a map of calibration/evaluation sites
+
+		# calibFold <- 1
+		# evalFold <- 2
+		# cex <- 0.6
+		# pch <- 3
+
+		# png('./figures_and_tables/example_of_training_calibration_evaluation_folds.png', width=1800, height=600)
+		
+			# par(mfrow=c(1, 3), oma=rep(0, 4), cex.main=2.2)
+			
+			# plot(studyRegionCroppedToPresentSpAlb, main=('Training, calibration,\nand evaluation occurrences'))
+			# x <- occsBg$calibEvalOccsBg[[1]]$occsBg
+			# x <- x[x$presBg == 1, ]
+			# x <- SpatialPointsDataFrame(x[ , ll], data=x, proj4string=getCRS('wgs84', TRUE))
+			# x <- sp::spTransform(x, getCRS('albersNA', TRUE))
+			# points(x, pch=pch, cex=cex)
+			# points(x[x$fold==calibFold, ], pch=pch, cex=cex, col='cyan')
+			# points(x[x$fold==evalFold, ], pch=pch, cex=cex, col='magenta')
+			
+			# legend('bottomright', inset=0.1, legend=c('Training', 'Calibration', 'Evaluation'), pch=pch, cex=2.2, col=c('black', 'cyan', 'magenta'), bty='n')
+			
+			# plot(studyRegionCroppedToPresentSpAlb, main=('Training and calibration\nbackground sites (narrowest extent)'))
+			# x <- occsBg$calibEvalOccsBg[[1]]$occsBg
+			# x <- x[x$presBg == 0, ]
+			# x <- SpatialPointsDataFrame(x[ , ll], data=x, proj4string=getCRS('wgs84', TRUE))
+			# x <- sp::spTransform(x, getCRS('albersNA', TRUE))
+			# points(x, pch=pch, cex=cex)
+			# points(x[x$fold==calibFold, ], pch=pch, cex=cex, col='cyan')
+			
+			# plot(studyRegionCroppedToPresentSpAlb, main=('Evaluation background sites'))
+			# x <- occsBg$testBg
+			# x <- SpatialPointsDataFrame(x[ , ll], data=x, proj4string=getCRS('wgs84', TRUE))
+			# x <- sp::spTransform(x, getCRS('albersNA', TRUE))
+			# points(x, pch=pch, cex=cex)
+			# points(x[x$fold==evalFold, ], pch=pch, cex=cex, col='magenta')
+			
+		# dev.off()
+		
+		# save(occsBg, file=paste0('./species_records/02_', gsub(tolower(species), pattern=' ', replacement='_'), '_collated_occurrence_and_background_sites.rda'))
+		
+say('########################')
+say('### calibrate models ###')
+say('########################')
+
+	say('This portion of the script calibrates ENMs using withheld calibration data.  Multiple models are trained using the same set of occurrence and background sites, then evaluated against a set of withheld occurrence and background sites.  The best model is chosen among these.  The best model is then evaluated using a second set of withheld sites.', breaks=80)
+
+	load(paste0('./species_records/02_', gsub(tolower(species), pattern=' ', replacement='_'), '_collated_occurrence_and_background_sites.rda'))
+
+	metrics <- c('logLoss', 'cbi', 'trainSe95')
+	
+	set.seed(123)
+	
+	# for (countExt in seq_along(exts)) {
+	for (countExtent in 1) {
+	# for (countExtent in 2) {
+	# for (countExtent in 3) {
+
+		ext <- exts[countExtent]
+	
+		# collate data
+		data <- occsBg$calibEvalOccsBg[[countExtent]]$occsBg
+		rownames(data) <- 1:nrow(data)
+		vars1and2 <- c(paste0('ccsm_', predictors), paste0('ecbilt_', predictors))
+		data$presBg <- as.numeric(data$presBg)
+		folds <- occsBg$calibEvalOccsBg[[countExtent]]$folds
+		weight <- data$weight
+	
+		for (gcm in gcms) {
+		# for (gcm in gcms[1]) { # ccsm
+
+			vars <- paste0(gcm, '_', predictors)
+
+			# GLM
+			algo <- 'glm'
+			say(gcm, ' ', ext, '-km extent tuning with ', algo, level=2)
+			calib <- trainByCrossValid(data=data, resp='presBg', preds=vars, folds=folds, trainFx=trainGlm, metrics=metrics, w=weight, na.rm=TRUE, out='tuning')
+			save(calib, file=paste0('./models/external_calibration_for_', tolower(ext), 'km_extent_with_', algo, '_', gcm, '_gcm.rda'))
+
+			# MaxEnt
+			algo <- 'maxent'
+			say(gcm, ' ', ext, '-km extent tuning with ', algo, level=2)
+			calib <- trainByCrossValid(data=data, resp='presBg', preds=vars, folds=folds, trainFx=trainMaxEnt, metrics=metrics, w=weight, na.rm=TRUE, out='tuning', jackknife=FALSE, scratchDir='D:/ecology/!Scratch/_temp', cores=6)
+			save(calib, file=paste0('./models/external_calibration_for_', tolower(ext), 'km_extent_with_', algo, '_', gcm, '_gcm.rda'))
+
+			# BRTs
+			algo <- 'brt'
+			say(gcm, ' ', ext, '-km extent tuning with ', algo, level=2)
+			calib <- trainByCrossValid(data=data, resp='presBg', preds=vars, folds=folds, trainFx=trainBrt, metrics=metrics, w=weight, na.rm=TRUE, cores=6, out='tuning', maxTrees=8000)
+			save(calib, file=paste0('./models/external_calibration_for_', tolower(ext), 'km_extent_with_', algo, '_', gcm, '_gcm.rda'))
+			
+			# NS
+			algo <- 'ns'
+			say(gcm, ' ', ext, '-km extent tuning with ', algo, level=2)
+			calib <- trainByCrossValid(data=data, resp='presBg', preds=vars, folds=folds, trainFx=trainNs, metrics=metrics, w=weight, na.rm=TRUE, out='tuning')
+			save(calib, file=paste0('./models/external_calibration_for_', tolower(ext), 'km_extent_with_', algo, '_', gcm, '_gcm.rda'))
+			
+		} # next GCM
+			
+	} # next extent
 
 # say('##############################')
 # say('### calibrate final models ###')
