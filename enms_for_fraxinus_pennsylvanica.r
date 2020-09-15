@@ -41,7 +41,7 @@
 ### setup ###
 #############
 
-	# source('C:/Ecology/Drive/Research/ABC vs Biogeography/NSF_ABI_2018_2021/data_and_analyses/green_ash/enms/code/enms_for_fraxinus_pennsylvanica.r')
+	# source('C:/Ecology/Drive/Research/ABC vs Biogeography/NSF_ABI_2018_2021/data_and_analyses/green_ash/enms/code/simple_enms_for_green_ash.r')
 
 	memory.limit(memory.limit() * 2^30)
 	rm(list=ls())
