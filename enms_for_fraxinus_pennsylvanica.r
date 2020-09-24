@@ -22,15 +22,14 @@
 ### define calibration regions ###
 ### select climate variables ###
 ### collate calibration/evaluation data ###
-### create plot demonstrating local SAC and LOO folds ###
-### calibrate models using leave-one-out cross-validation ###
-### calibrate final models ###
-### project final models ###
-### convert prediction rasters to matrices for TIMBER ###
-### figure of predictions ###
-### analyze similarity between model projections ###
+### calibrate models ###
+### calibrate and evaluate final models ###
+### assess differences between model output ###
+### project models back in time ###
+### make maps of predictions ###
 ### calculate biotic velocity ###
-### plot potential total population size ###
+### plot biotic velocity ###
+
 
 ### NOTES
 ### Variable naming conventions:
@@ -42,6 +41,7 @@
 #############
 
 	# source('C:/Ecology/Drive/Research/ABC vs Biogeography/NSF_ABI_2018_2021/data_and_analyses/green_ash/enms/code/enms_for_fraxinus_pennsylvanica.r')
+	# source('H:/Global Change Program/Research/ABC for Biogeographic History of Trees/code/enms_for_fraxinus_pennsylvanica.r')
 
 	memory.limit(memory.limit() * 2^30)
 	rm(list=ls())
@@ -55,22 +55,29 @@
 
 	library(BIEN)
 	library(brglm2)
-	library(sp)
+	library(cluster)
+	library(dismo)
+	library(geosphere)
 	library(rgdal)
 	library(raster)
 	library(RColorBrewer)
-	library(geosphere)
 	library(rgeos)
-	library(dismo)
-	library(blockCV)
+	library(rJava)
 	library(scales)
+	library(sp)
+
 	library(omnibus) # Adam's grab-bag library (https://github.com/adamlilith/omnibus)
 	library(enmSdm) # Adam's SDM library (https://github.com/adamlilith/enmSdm)
 	library(statisfactory) # Adam's statistics library (https://github.com/adamlilith/statisfactory)
 	library(legendary) # Adam's plotting library (https://github.com/adamlilith/legenday)
 	
 	setwd('C:/Ecology/Drive/Research/ABC vs Biogeography/NSF_ABI_2018_2021/data_and_analyses/green_ash/enms')
+	# setwd('H:/Global Change Program/Research/ABC for Biogeographic History of Trees')
 
+	# tempDir <- 'D:/ecology/!Scratch/_temp'
+	tempDir <- 'E:/ecology/!Scratch/_temp'
+	dirCreate(tempDir)
+	
 	dirCreate('./figures_and_tables')
 	dirCreate('./species_records')
 	dirCreate('./regions')
@@ -185,11 +192,20 @@
 	# GCMs
 	gcms <- c('ccsm', 'ecbilt')
 	
+	# SDM algorithms
+	algos <- c('brt', 'glm', 'maxent', 'ns')
+	
+	# desired number of final model clusters... used to simplify output
+	numModelClusts <- 8
+
+	# colors for clusters... only the first "numModelClusts" will be used
+	clustCols <- c('#a6cee3','#1f78b4','#fb9a99','#e31a1c','#fdbf6f','#ff7f00','#cab2d6','#6a3d9a','#ffff99','#b15928', '#8dd3c7','#ffffb3','#bebada','#fb8072','#80b1d3','#fdb462','#b3de69','#fccde5','#d9d9d9','#bc80bd','#ccebc5','#ffed6f')
+
 	# decided in "### process current/paleoclimate layers ###"
 	if (file.exists('./figures_and_tables/predictors.rda')) load('./figures_and_tables/predictors.rda')
 
 	# study region polygon
-	studyRegionSpAlb <- shapefile('C:/Ecology/Drive/Research/ABC vs Biogeography/NSF_ABI_2018_2021/data_and_analyses/green_ash/study_region/study_region_spatial_polygons/study_region_mask_without_glaciers')
+	if (file.exists('./regions/studyRegion.rda')) load('./regions/studyRegion.rda')
 	
 	# mask raster for present-day land (1 = land, NA = not)
 	if (file.exists('./regions/maskRaster.tif')) {
@@ -225,6 +241,10 @@
 	if (file.exists('./regions/gadm36_northAmerica_sp_level_1.rda')) load('./regions/gadm36_northAmerica_sp_level_1.rda')
 	if (file.exists('./regions/gadm36_northAmerica_spAlb_level_1.rda')) load('./regions/gadm36_northAmerica_spAlb_level_1.rda')
 	
+	if (file.exists('./regions/gadm36_northAmerica_spAlb_continental.rda')) load('./regions/gadm36_northAmerica_spAlb_continental.rda')
+	
+	if (file.exists('./regions/gadm36_northAmerica_spAlb_continental_cropToStudyRegion.rda')) load('./regions/gadm36_northAmerica_spAlb_continental_cropToStudyRegion.rda')
+	
 	# range maps
 	if (file.exists('./regions/bien_range_map/Fraxinus_pennsylvanica.shp')) {
 		bienRange <- shapefile('./regions/bien_range_map/Fraxinus_pennsylvanica.shp')
@@ -238,6 +258,14 @@
 # say('#######################################', post=2)
 
 	# say('Basemap data includes shapefiles of North American countries and the range maps of the species from BIEN and Little. We will create equal-area versions of each in an Albers projection (object names will be suffixed with "Alb")', breaks=80)
+
+	# study region
+	if (!file.exists('./regions/studyRegion.rda')) {
+	
+		studyRegionSpAlb <- shapefile('C:/Ecology/Drive/Research/ABC vs Biogeography/NSF_ABI_2018_2021/data_and_analyses/green_ash/study_region/study_region_spatial_polygons/study_region_mask_without_glaciers')
+		save(studyRegionSpAlb, file='./regions/studyRegion.rda')
+		
+	}
 
 	# ### North America Level 2
 		
@@ -316,8 +344,18 @@
 		# nam0SpAlb <- sp::spTransform(nam0Sp, getCRS('albersNA', TRUE))
 		# save(nam0Sp, file='./regions/gadm36_northAmerica_sp_level_0.rda')
 		# save(nam0SpAlb, file='./regions/gadm36_northAmerica_spAlb_level_0.rda')
+		
+		# # continent
+		# namSpAlb <- gUnaryUnion(nam0SpAlb)
+		# save(namSpAlb, file='./regions/gadm36_northAmerica_spAlb_continental.rda')
+		
+		# # # continent cropped to study region
+		# studyRegionRasts <- brick('C:/Ecology/Drive/Research/ABC vs Biogeography/NSF_ABI_2018_2021/data_and_analyses/green_ash/study_region/!study_region_raster_masks/study_region_daltonIceMask_lakesMasked_linearIceSheetInterpolation.tif')
+					
+		# namSpAlbStudyRegion <- crop(namSpAlb, studyRegionRasts[[1]])
+		# save(namSpAlbStudyRegion, file='./regions/gadm36_northAmerica_spAlb_continental_cropToStudyRegion.rda')
 			
-	# ### study regoiin cropped to present-day land
+	# ### study region cropped to present-day land
 	# if (!exists('studyRegionCroppedToPresentSpAlb')) {
 		# studyRegionCroppedToPresentSpAlb <- crop(studyRegionSpAlb, nam0SpAlb)
 		# save(studyRegionCroppedToPresentSpAlb, file='./regions/studyRegion_croppedToPresentLand.rda')
@@ -966,542 +1004,820 @@
 		
 		# save(occsBg, file=paste0('./species_records/02_', gsub(tolower(species), pattern=' ', replacement='_'), '_collated_occurrence_and_background_sites.rda'))
 		
-say('########################')
-say('### calibrate models ###')
-say('########################')
+# say('########################')
+# say('### calibrate models ###')
+# say('########################')
 
-	say('This portion of the script calibrates ENMs using withheld calibration data.  Multiple models are trained using the same set of occurrence and background sites, then evaluated against a set of withheld occurrence and background sites.  The best model is chosen among these.  The best model is then evaluated using a second set of withheld sites.', breaks=80)
+	# say('This portion of the script calibrates ENMs using withheld calibration data.  Multiple models are trained using the same set of occurrence and background sites, then evaluated against a set of withheld occurrence and background sites.  The best model is chosen among these.  The best model is then evaluated using a second set of withheld sites.', breaks=80)
 
-	load(paste0('./species_records/02_', gsub(tolower(species), pattern=' ', replacement='_'), '_collated_occurrence_and_background_sites.rda'))
+	# load(paste0('./species_records/02_', gsub(tolower(species), pattern=' ', replacement='_'), '_collated_occurrence_and_background_sites.rda'))
 
-	metrics <- c('logLoss', 'cbi', 'trainSe95')
+	# metrics <- c('logLoss', 'cbi', 'trainSe95')
 	
-	set.seed(123)
+	# set.seed(123)
 	
 	# for (countExt in seq_along(exts)) {
-	for (countExtent in 1) {
-	# for (countExtent in 2) {
-	# for (countExtent in 3) {
+	# # for (countExtent in 1) { # POWERBANK #4
+	# # for (countExtent in 2) { # POWERBANK #3
+	# # for (countExtent in 3) { # POWERBANK #??
 
-		ext <- exts[countExtent]
+		# ext <- exts[countExtent]
 	
-		# collate data
-		data <- occsBg$calibEvalOccsBg[[countExtent]]$occsBg
-		rownames(data) <- 1:nrow(data)
-		vars1and2 <- c(paste0('ccsm_', predictors), paste0('ecbilt_', predictors))
-		data$presBg <- as.numeric(data$presBg)
-		folds <- occsBg$calibEvalOccsBg[[countExtent]]$folds
-		weight <- data$weight
+		# # collate data
+		# data <- occsBg$calibEvalOccsBg[[countExtent]]$occsBg
+		# rownames(data) <- 1:nrow(data)
+		# vars1and2 <- c(paste0('ccsm_', predictors), paste0('ecbilt_', predictors))
+		# data$presBg <- as.numeric(data$presBg)
+		# folds <- occsBg$calibEvalOccsBg[[countExtent]]$folds
+		# weight <- data$weight
 	
-		for (gcm in gcms) {
-		# for (gcm in gcms[1]) { # ccsm
+		# for (gcm in gcms) {
+		# # for (gcm in gcms[1]) { # ccsm
 
-			vars <- paste0(gcm, '_', predictors)
+			# vars <- paste0(gcm, '_', predictors)
 
-			# GLM
-			algo <- 'glm'
-			say(gcm, ' ', ext, '-km extent tuning with ', algo, level=2)
-			calib <- trainByCrossValid(data=data, resp='presBg', preds=vars, folds=folds, trainFx=trainGlm, metrics=metrics, w=weight, na.rm=TRUE, out='tuning')
-			save(calib, file=paste0('./models/external_calibration_for_', tolower(ext), 'km_extent_with_', algo, '_', gcm, '_gcm.rda'))
+			# # GLM
+			# algo <- 'glm'
+			# say(gcm, ' ', ext, '-km extent tuning with ', algo, level=2)
+			# calib <- trainByCrossValid(data=data, resp='presBg', preds=vars, folds=folds, trainFx=trainGlm, metrics=metrics, w=weight, na.rm=TRUE, out='tuning')
+			# save(calib, file=paste0('./models/external_calibration_for_', tolower(ext), 'km_extent_with_', algo, '_', gcm, '_gcm.rda'))
 
-			# MaxEnt
-			algo <- 'maxent'
-			say(gcm, ' ', ext, '-km extent tuning with ', algo, level=2)
-			calib <- trainByCrossValid(data=data, resp='presBg', preds=vars, folds=folds, trainFx=trainMaxEnt, metrics=metrics, w=weight, na.rm=TRUE, out='tuning', jackknife=FALSE, scratchDir='D:/ecology/!Scratch/_temp', cores=6)
-			save(calib, file=paste0('./models/external_calibration_for_', tolower(ext), 'km_extent_with_', algo, '_', gcm, '_gcm.rda'))
+			# # MaxEnt
+			# algo <- 'maxent'
+			# say(gcm, ' ', ext, '-km extent tuning with ', algo, level=2)
+			# calib <- trainByCrossValid(data=data, resp='presBg', preds=vars, folds=folds, trainFx=trainMaxEnt, metrics=metrics, w=weight, na.rm=TRUE, out='tuning', jackknife=FALSE, scratchDir=tempDir, cores=6)
+			# save(calib, file=paste0('./models/external_calibration_for_', tolower(ext), 'km_extent_with_', algo, '_', gcm, '_gcm.rda'))
 
-			# BRTs
-			algo <- 'brt'
-			say(gcm, ' ', ext, '-km extent tuning with ', algo, level=2)
-			calib <- trainByCrossValid(data=data, resp='presBg', preds=vars, folds=folds, trainFx=trainBrt, metrics=metrics, w=weight, na.rm=TRUE, cores=6, out='tuning', maxTrees=8000)
-			save(calib, file=paste0('./models/external_calibration_for_', tolower(ext), 'km_extent_with_', algo, '_', gcm, '_gcm.rda'))
+			# # BRTs
+			# algo <- 'brt'
+			# say(gcm, ' ', ext, '-km extent tuning with ', algo, level=2)
+			# calib <- trainByCrossValid(data=data, resp='presBg', preds=vars, folds=folds, trainFx=trainBrt, metrics=metrics, w=weight, na.rm=TRUE, cores=6, out='tuning', maxTrees=8000, anyway=TRUE)
+			# save(calib, file=paste0('./models/external_calibration_for_', tolower(ext), 'km_extent_with_', algo, '_', gcm, '_gcm.rda'))
 			
-			# NS
-			algo <- 'ns'
-			say(gcm, ' ', ext, '-km extent tuning with ', algo, level=2)
-			calib <- trainByCrossValid(data=data, resp='presBg', preds=vars, folds=folds, trainFx=trainNs, metrics=metrics, w=weight, na.rm=TRUE, out='tuning')
-			save(calib, file=paste0('./models/external_calibration_for_', tolower(ext), 'km_extent_with_', algo, '_', gcm, '_gcm.rda'))
+			# # NS
+			# algo <- 'ns'
+			# say(gcm, ' ', ext, '-km extent tuning with ', algo, level=2)
+			# calib <- trainByCrossValid(data=data, resp='presBg', preds=vars, folds=folds, trainFx=trainNs, metrics=metrics, w=weight, na.rm=TRUE, out='tuning')
+			# save(calib, file=paste0('./models/external_calibration_for_', tolower(ext), 'km_extent_with_', algo, '_', gcm, '_gcm.rda'))
 			
-		} # next GCM
+		# } # next GCM
 			
-	} # next extent
+	# } # next extent
 
-# say('##############################')
-# say('### calibrate final models ###')
-# say('##############################')
+# say('###########################################')
+# say('### calibrate and evaluate final models ###')
+# say('###########################################')
+
+	# say('Make one model per extent, GCM, and algorithm using all occurrence data. Call this the "final" model. Make k-fold models with all data except that from each fold (combine training and calibration data from previous step and use just evaluation data as the withheld portion.', breaks=80)
 
 	# # proportion of models for which a variable/feature must be included for the variable/feature to be included in the final model
-	# bestThreshGlm <- 0.2
-	# bestThreshMx <- 0.4
+	# bestThreshGlm <- 1 / 3
 
-	# load(paste0('./species_records/02_', gsub(species, pattern=' ', replacement='_'), '_occurrences_background_env_kFolds_broad.rda'))
-	# load(paste0('./species_records/02_', gsub(species, pattern=' ', replacement='_'), '_occurrences_background_env_kFolds_narrow.rda'))
-
-	# sink('./models/final_model_calibration.txt', split=TRUE)
+	# set.seed(123)
 	
-	# for (ext in exts) {
+	# load(paste0('./species_records/02_', gsub(tolower(species), pattern=' ', replacement='_'), '_collated_occurrence_and_background_sites.rda'))
 
+	# evals <- data.frame() # k-fold evaluation statistics
+	
+	# for (countExtent in seq_along(exts)) {
+	# # for (countExtent in 1) { # POWERBANK #4
+	# # for (countExtent in 2) { # POWERBANK #3
+	# # for (countExtent in 3) { # POWERBANK #??
+
+		# ext <- exts[countExtent]
+	
 		# # collate data
-		# data <- get(paste0('occsBg', ext))
-		# folds <- data[ , grepl(names(data), pattern='fold')]
+		# data <- occsBg$calibEvalOccsBg[[countExtent]]$occsBg
+		# rownames(data) <- 1:nrow(data)
+		# vars1and2 <- c(paste0('ccsm_', predictors), paste0('ecbilt_', predictors))
+		# data$presBg <- as.numeric(data$presBg)
 		# weight <- data$weight
+
+		# # get test folds... training data will consists of (prior) training data plus calibration fold
+		# # test data is the same... complicated because "folds" matrix was intended to cycle across all possible
+		# # combinations of calibration/evaluation folds
+		# folds <- occsBg$calibEvalOccsBg[[countExtent]]$folds
+		# foldsNames <- colnames(folds)
+		# foldsNames <- strsplit(foldsNames, '_vs_eval')
+		# evalFolds <- integer()
+		# for (i in seq_along(foldsNames)) evalFolds <- c(evalFolds, as.integer(foldsNames[[i]][2]))
+		
+		# foldColumnsToModel <- integer()
+		# numFolds <- max(evalFolds)
+		# for (i in 1:numFolds) {
+			# foldColumnsToModel <- c(foldColumnsToModel, min(which(evalFolds == i)))
+		# }
+		# foldInteger <- evalFolds[foldColumnsToModel]
 
 		# for (gcm in gcms) {
 
 			# vars <- paste0(gcm, '_', predictors)
-			
+
 			# ### GLM
-			# say(tolower(ext), ' ', gcm, ' glm', level=1)
-
-			# load(paste0('./models/loo_calibration_for_', tolower(ext), '_extent_with_glm_', gcm, '_gcm.rda'))
-			# calibSummary <- summaryByCrossValid(calib, 'trainGlm', metric='logLossTestEqualWeight', descending=FALSE)
-			
-			# say('Summary of LOO calibration:')
-			# print(calibSummary)
-
-			# bestPreds <- calibSummary$term[calibSummary$proportionOfModels >= bestThreshGlm]
-			# say('Best predictors:')
-			# print(bestPreds)
-			
-			# form <- paste0('presBg ~ ', paste(bestPreds, collapse=' + '))
-			# model <- glm(form, data=data, weights=weight, family='binomial')
-			# save(model, file=paste0('./models/final_model_for_', tolower(ext), '_extent_with_glm_', gcm, '_gcm.rda'))
-
-			# ### MaxEnt
-			# say(tolower(ext), ' ', gcm, ' maxent', level=1)
-
-			# load(paste0('./models/loo_calibration_for_', tolower(ext), '_extent_with_maxent_', gcm, '_gcm.rda'))
-			# calibSummary <- summaryByCrossValid(calib, 'trainMaxEnt', metric='logLossTestEqualWeight', descending=FALSE)
-
-			# say('Summary of LOO calibration:')
-			# print(calibSummary)
-			
-			# bestPreds <- calibSummary$term[calibSummary$proportionOfModels >= bestThreshMx]
-			# linear <- ('linear' %in% bestPreds)
-			# quadratic <- ('quadratic' %in% bestPreds)
-			# hinge <- ('hinge' %in% bestPreds)
-			# product <- ('product' %in% bestPreds)
-			# threshold <- ('threshold' %in% bestPreds)
-			
-			# regMultMin <- calibSummary$value[calibSummary$term == 'regMult_25PercQuant']
-			# regMultMax <- calibSummary$value[calibSummary$term == 'regMult_75PercQuant']
-			# regMult <- seq(regMultMin, regMultMax, length.out=10)
-
-			# say('Features included:', pre=1)
-			# say('linear ........ ', linear)
-			# say('quadratic ..... ', quadratic)
-			# say('hinge ..........', hinge)
-			# say('product ........', product)
-			# say('threshold ......', threshold)
-			# say('regMult ........', paste(round(regMult, 3), collapse=', '), pre=1)
-
-			# model <- trainMaxEnt(data=data, resp='presBg', preds=vars, linear=linear, quadratic=quadratic, hinge=hinge, product=product, threshold=threshold, regMult=regMult, out=c('model', 'tuning'), jackknife=FALSE, scratchDir='C:/ecology/!Scratch/_temp')
-			# model <- model$model
-			# save(model, file=paste0('./models/final_model_for_', tolower(ext), '_extent_with_maxent_', gcm, '_gcm.rda'))
-			
-		# } # next GCM
-			
-	# } # next extent
-	
-	# sink()
-	
-# say('############################')
-# say('### project final models ###')
-# say('############################')
-
-	# # mask from Great Lakes and Canadian large lakes
-	# load('D:/Ecology/Water Bodies/Great Lakes - USGS/greatLakes.rda')
-	# load('D:/Ecology/Water Bodies/Major Lakes of Canada - USGS/canadaMajorLakes.rda')
-	# canadaMajorLakes <- sp::spTransform(canadaMajorLakes, CRS(projection(greatLakes)))
-
-	# !!!
-	# mask <- raster('D:/Ecology/Climate/Lorenz et al 2016 North America 21Kybp to 2100 CE/!ENSEMBLE 1950-2005 across 12 ESMs/an_avg_ETR.tif')
-	# mask1 <- rasterize(greatLakes, mask)
-	# mask2 <- rasterize(canadaMajorLakes, mask)
-	
-	# mask <- stack(mask1, mask2)
-	# mask <- max(mask, na.rm=TRUE)
-	# mask <- calc(mask, fun=function(x) ifelse(is.na(x), 1, NA))
-	
-	# for (ext in exts) {
-# # for (ext in 'Broad') {
-
-		# for (gcm in gcms) {
-# # for (gcm in 'ccsm') {
-
-			# for (algo in c('glm', 'maxent')) {
-			
-				# say(tolower(ext), ' ', gcm, ' ', algo)
-				# load(paste0('./models/final_model_for_', tolower(ext), '_extent_with_', algo, '_', gcm, '_gcm.rda'))
-							
-				# if (exists('timeStack')) rm(timeStack)
-				
-				# for (year in rastTimes) {
-					
-					# clim <- getClimRasts(gcm=gcm, year=year, variables=predictors, rescale=TRUE)
-					
-					# pred <- if (algo == 'glm') {
-						# predict(clim, model, type='response')
-					# } else if (algo == 'maxent') {
-						# raster::predict(clim, model, fun=enmSdm::predictMaxEnt, type='cloglog')
-					# }
-					
-					# pred <- pred * mask
-					# names(pred) <- paste0('year', year, 'BP')
-					
-					# timeStack <- if (exists('timeStack')) {
-						# raster::stack(timeStack, pred)
-					# } else {
-						# pred
-					# }
-					
-				# }
-				
-				# say('   interpolating...')
-				# predByGen <- enmSdm::interpolateRasters(timeStack, interpFrom=rastTimes, interpTo=genTimes)
-				
-				# predByGen <- round(100 * predByGen)
-				# names(predByGen) <- paste0('year', genTimes, 'BP')
-				
-				# writeRaster(predByGen, paste0('./predictions/predictions_', gcm, '_', algo, '_for_', tolower(ext), '_extent'), datatype='INT1U')
-				
-			# } # next algorithm
-			
-		# } # next GCM
-			
-	# } # next extent
-
-# say('#########################################################')
-# say('### convert prediction rasters to matrices for TIMBER ###')
-# say('#########################################################')
-	
-	# # load extent for TIMBER... manually selected based on current occurrences and ENM and GLM ENM
-	# load('./regions/timber_extent_manually_selected.rda')
-
-	# # for (ext in exts) {
-# for (ext in 'Broad') {
-
-		# # for (gcm in gcms) {
-# for (gcm in 'ccsm') {
-
-			# for (algo in c('glm', 'maxent')) {
-
-				# say(tolower(ext), ' ', gcm, ' ', algo)
-		
-				# # predictions
-				# pred <- brick(paste0('./predictions/predictions_', gcm, '_', algo, '_for_', tolower(ext), '_extent.tif'), datatype='INT1U')
-				
-				# # crop to TIMBER extent
-				# pred <- aggregate(pred, fact=2)
-				# pred <- crop(pred, timberExtent)
-				
-				# pred <- projectRaster(pred, crs=getCRS('albersNA'))
-				# pred <- round(pred)
-				# names(pred) <- paste0('year', genTimes, 'BP')
-
-				# predArray <- raster::as.array(pred)
-				# saveRDS(predArray, paste0('./predictions/prediction_array_for_', algo, '_', gcm, '_gcm_', tolower(ext), '_extent.rds'))
-				
-			# } # next algorithm
-					
-		# } # next GCM
-			
-	# } # next extent
-
-# say('#############################')
-# say('### figure of predictions ###')
-# say('#############################')
-	
-	# # americas <- c('Canada', 'Mexico', 'United States', 'Guatemala', 'Belize', 'Honduras', 'El Salvador', 'Nicaragua', 'Costa Rica', 'Panama', 'Colombia', 'Venezuela', 'Guyana', 'Ecuador', 'Brazil', 'Peru', 'Suriname', 'French Guiana', 'Cuba', 'Haiti', 'Dominican Republic', 'Jamaica', 'Chile', 'Paraguay', 'Uruguay', 'Trinidad and Tobago', 'Bahamas', 'Barbados', 'Saint Lucia', ' Saint Vincent and the Grenadines', 'Grenada', 'Antigua and Barbuda', 'Dominica', 'Saint Kitts and Nevis')
-	# # americas <- c('Canada', 'Mexico', 'United States', 'Guatemala', 'Belize', 'Honduras', 'El Salvador', 'Nicaragua', 'Costa Rica', 'Panama', 'Colombia', 'Ecuador', 'Cuba', 'Haiti', 'Dominican Republic', 'Jamaica', 'Trinidad and Tobago', 'Bahamas', 'Barbados', 'Saint Lucia', ' Saint Vincent and the Grenadines', 'Grenada', 'Antigua and Barbuda', 'Dominica', 'Saint Kitts and Nevis')
-	
-	# # load('D:/Ecology/Political Geography/GADM/ver3pt6/gadm36_0.RData')
-	# # gadm0Am <- gadm[gadm$NAME_0 %in% americas, ]
-	# # gadm0AmAlb <- sp::spTransform(gadm0Am, getCRS('albersNA', TRUE))
-	
-	# load('./species_records/01_Fraxinus_pennsylvanica_bien_cleaned_occurrences_thinned.rda')
-	# figExt <- extent(occsSpAlb)
-	# figExt <- as(figExt, 'SpatialPolygons')
-	# projection(figExt) <- getCRS('albersNA')
-	# figExt <- gBuffer(figExt, width=300000)
-
-	# # colors
-	# breaks <- seq(0, 100, by=10)
-	# cols <- c('gray', 'gray', '#e5f5e0', '#c7e9c0', '#a1d99b', '#74c476', '#41ab5d', '#238b45', '#006d2c', '#00441b')
-	
-	# for (ext in exts) {
-	# # for (ext in exts[1]) {
-	# # for (ext in exts[2]) {
-
-		# # for (gcm in gcms[1]) {
-		# for (gcm in gcms) {
-		# # for (gcm in gcms[2]) {
-
 			# algo <- 'glm'
-			# predGlm <- brick(paste0('./predictions/predictions_', gcm, '_', algo, '_for_', tolower(ext), '_extent.tif'), datatype='INT1U')
-			# predGlm <- projectRaster(predGlm, crs=getCRS('albersNA'))
-			# names(predGlm) <- paste0('year', genTimes, 'BP')
+			# say(gcm, ' ', ext, '-km extent tuning with ', algo, level=2)
 			
-			# algo <- 'maxent'
-			# predMx <- brick(paste0('./predictions/predictions_', gcm, '_', algo, '_for_', tolower(ext), '_extent.tif'), datatype='INT1U')
-			# predMx <- projectRaster(predMx, crs=getCRS('albersNA'))
-			# names(predMx) <- paste0('year', genTimes, 'BP')
+			# load(paste0('./models/external_calibration_for_', tolower(ext), 'km_extent_with_', algo, '_', gcm, '_gcm.rda'))
+			# synopsis <- summaryByCrossValid(calib, trainFxName='trainGlm', metric='cbiTest')
+			# terms <- synopsis$term[synopsis$proportionOfModels >= bestThreshGlm]
+			# form <- paste0('presBg ~ 1 + ', paste(terms, collapse=' + '))
 			
-			# dirCreate(paste0('./figures_and_tables/prediction_figures_for_', gcm, '_gcm_', tolower(ext), '_ext'))
+			# # full model
+			# model <- glm(form, data=data, family='binomial', weights=weight)
+			# save(model, file=paste0('./models/final_model_for_', tolower(ext), 'km_extent_with_', algo, '_', gcm, '_gcm.rda'))
 			
-			# for (period in seq_along(genTimes)) {
-				
-				# genTime_yr <- genTimes[period]
-				# say(tolower(ext), ' ', gcm, ' ', genTime_yr)
-				
-				# png(paste0('./figures_and_tables/prediction_figures_for_', gcm, '_gcm_', tolower(ext), '_ext/', prefix(genTime_yr, 5), 'YPB.png'), width=1200, height=800)
+			# # k-fold models
+			# for (subK in 1:numFolds) {
 
-					# par(mfrow=c(1, 2), oma=c(0, 0, 0, 0), mar=rep(0.25, 4), cex.main=2)
-
-					# plot(figExt, border=NA, ann=FALSE, xpd=NA)
-					# plot(predGlm[[period]], col=cols, breaks=breaks, legend=FALSE, add=TRUE)
-					# # plot(gadm0AmAlb, border='gray30', add=TRUE)
-					# # title(main=paste0('GLM with ', ext, ' Background and ', toupper(gcm), ' AOGCM\n', genTime_yr, ' YBP'), line=-7)
-					# text(-2474842, -2936141, labels=paste0(genTime_yr, ' YBP\n', ext, ' Extent | ', toupper(gcm), ' GCM | GLM'), cex=3, pos=4)
+				# # get column of folds matrix to use and the actual number identifying this fold
+				# thisFoldCol <- foldColumnsToModel[subK]
+				# thisFoldInteger <- foldInteger[subK]
+			
+				# # training and test data
+				# thisFolds <- folds[ , thisFoldCol]
+				# trains <- which(!is.na(thisFolds))
+				# tests <- which(is.na(thisFolds))
+				# thisTrainData <- data[trains, ]
+				# thisTestPres <- data[tests, ]
+				# thisTestPres <- thisTestPres[thisTestPres$presBg == 1, ]
+				# thisTestBg <- occsBg$testBg[occsBg$testBg$fold == foldInteger[subK], ]
 				
-					# plot(figExt, border=NA, ann=FALSE, xpd=NA)
-					# plot(predMx[[period]], col=cols, breaks=breaks, legend=FALSE, add=TRUE)
-					# # plot(gadm0AmAlb, border='gray30', add=TRUE)
-					# # title(main=paste0('Maxent with ', ext, ' Background and ', toupper(gcm), ' AOGCM\n', genTime_yr, ' YBP'), line=-7)
-					# text(-2474842, -2936141, labels=paste0(genTime_yr, ' YBP\n', ext, ' Extent | ', toupper(gcm), ' GCM | MAXENT'), cex=3, pos=4)
-					
-					# # title(sub=date(), outer=TRUE, cex.sub=0.8, line=-2)
-					
-				# dev.off()
+				# # model and evaluation
+				# kModel <- glm(form, data=thisTrainData, family='binomial', weights=thisTrainData$weight)
+				# predsAtPres <- predict(kModel, thisTestPres, type='response')
+				# predsAtBg <- predict(kModel, thisTestBg, type='response')
+				
+				# cbi <- contBoyce(predsAtPres, predsAtBg, na.rm=TRUE)
+				
+				# evals <- rbind(
+					# evals,
+					# data.frame(
+						# algo = algo,
+						# gcm = gcm,
+						# extent_km = ext,
+						# fold = thisFoldInteger,
+						# cbi = cbi
+					# )
+				# )
 				
 			# }
+			
+			# ### Maxent
+			# algo <- 'maxent'
+			# say(gcm, ' ', ext, '-km extent tuning with ', algo, level=2)
+			
+			# load(paste0('./models/external_calibration_for_', tolower(ext), 'km_extent_with_', algo, '_', gcm, '_gcm.rda'))
+			# synopsis <- summaryByCrossValid(calib, trainFxName='trainMaxEnt', metric='cbiTest')
+			
+			# feats <- synopsis$featureSet[which.max(synopsis$frequencyInBestModels)]
+			# regMult <- synopsis$meanRegMult[which.max(synopsis$frequencyInBestModels)]
+			
+			# args <- c(
+				# paste0('betamultiplier=', regMult),
+				# paste0('linear=', ifelse(grepl('l', feats), 'true', 'false')),
+				# paste0('product=', ifelse(grepl('p', feats), 'true', 'false')),
+				# paste0('quadratic=', ifelse(grepl('q', feats), 'true', 'false')),
+				# paste0('hinge=', ifelse(grepl('h', feats), 'true', 'false')),
+				# paste0('threshold=', ifelse(grepl('t', feats), 'true', 'false')),
+				# paste0('jackknife=true')
+			# )
+			
+			# model <- maxent(data[ , vars], p=data$presBg, args=args)
+			# save(model, file=paste0('./models/final_model_for_', tolower(ext), 'km_extent_with_', algo, '_', gcm, '_gcm.rda'))
+
+			# # k-fold models
+			# for (subK in 1:numFolds) {
+
+				# # get column of folds matrix to use and the actual number identifying this fold
+				# thisFoldCol <- foldColumnsToModel[subK]
+				# thisFoldInteger <- foldInteger[subK]
+			
+				# # training and test data
+				# thisFolds <- folds[ , thisFoldCol]
+				# trains <- which(!is.na(thisFolds))
+				# tests <- which(is.na(thisFolds))
+				# thisTrainData <- data[trains, ]
+				# thisTestPres <- data[tests, ]
+				# thisTestPres <- thisTestPres[thisTestPres$presBg == 1, ]
+				# thisTestBg <- occsBg$testBg[occsBg$testBg$fold == foldInteger[subK], ]
+				
+				# # model and evaluation
+				# kModel <- maxent(thisTrainData[ , vars], p=thisTrainData$presBg, args=args)
+				# predsAtPres <- predictMaxEnt(kModel, thisTestPres, type='cloglog')
+				# predsAtBg <- predictMaxEnt(kModel, thisTestBg, type='cloglog')
+				
+				# cbi <- contBoyce(predsAtPres, predsAtBg, na.rm=TRUE)
+				
+				# evals <- rbind(
+					# evals,
+					# data.frame(
+						# algo = algo,
+						# gcm = gcm,
+						# extent_km = ext,
+						# fold = thisFoldInteger,
+						# cbi = cbi
+					# )
+				# )
+				
+			# }
+
+			# ### BRTs
+			# algo <- 'brt'
+			# say(gcm, ' ', ext, '-km extent tuning with ', algo, level=2)
+			# load(paste0('./models/external_calibration_for_', tolower(ext), 'km_extent_with_', algo, '_', gcm, '_gcm.rda'))
+			# synopsis <- summaryByCrossValid(calib, trainFxName='trainBrt', metric='cbiTest')
+			
+			# learningRate <- synopsis$learningRate[synopsis$value == 'mean']
+			# treeComplexity <- synopsis$treeComplexity[synopsis$value == 'mean']
+			# bagFraction <- synopsis$bagFraction[synopsis$value == 'mean']
+			
+			# model <- trainBrt(data=data, resp='presBg', preds=vars, learningRate=learningRate, treeComplexity=treeComplexity, bagFraction=bagFraction, nTrees=8000, w=weight, anyway=TRUE)
+			# save(model, file=paste0('./models/final_model_for_', tolower(ext), 'km_extent_with_', algo, '_', gcm, '_gcm.rda'))
+
+			# # k-fold models
+			# for (subK in 1:numFolds) {
+
+				# # get column of folds matrix to use and the actual number identifying this fold
+				# thisFoldCol <- foldColumnsToModel[subK]
+				# thisFoldInteger <- foldInteger[subK]
+			
+				# # training and test data
+				# thisFolds <- folds[ , thisFoldCol]
+				# trains <- which(!is.na(thisFolds))
+				# tests <- which(is.na(thisFolds))
+				# thisTrainData <- data[trains, ]
+				# thisTestPres <- data[tests, ]
+				# thisTestPres <- thisTestPres[thisTestPres$presBg == 1, ]
+				# thisTestBg <- occsBg$testBg[occsBg$testBg$fold == foldInteger[subK], ]
+				
+				# # model and evaluation
+				# kModel <- trainBrt(data=thisTrainData, resp='presBg', preds=vars, learningRate=learningRate, treeComplexity=treeComplexity, bagFraction=bagFraction, nTrees=8000, w=thisTrainData$weight, anyway=TRUE)
+
+				# if (!is.null(kModel)) {
+
+					# predsAtPres <- predictEnmSdm(kModel, thisTestPres)
+					# predsAtBg <- predictEnmSdm(kModel, thisTestBg)
 					
+					# cbi <- contBoyce(predsAtPres, predsAtBg, na.rm=TRUE)
+
+					# evals <- rbind(
+						# evals,
+						# data.frame(
+							# algo = algo,
+							# gcm = gcm,
+							# extent_km = ext,
+							# fold = thisFoldInteger,
+							# cbi = cbi
+						# )
+					# )
+					
+				# # model did not converge or was insufficient
+				# } else {
+				
+					# evals <- rbind(
+						# evals,
+						# data.frame(
+							# algo = algo,
+							# gcm = gcm,
+							# extent_km = ext,
+							# fold = thisFoldInteger,
+							# cbi = NA
+						# )
+					# )
+					
+				# }
+					
+			# }
+			
+			# ### NS
+			# algo <- 'ns'
+			# say(gcm, ' ', ext, '-km extent tuning with ', algo, level=2)
+			# load(paste0('./models/external_calibration_for_', tolower(ext), 'km_extent_with_', algo, '_', gcm, '_gcm.rda'))
+			# synopsis <- summaryByCrossValid(calib, trainFxName='trainNs', metric='cbiTest')
+
+			# nsPreds <- synopsis$term
+			# nsDfs <- pmax(1, round(synopsis$meanDf))
+			
+			# form <- paste0('presBg ~ 1 + ', paste(paste('splines::ns(', nsPreds, ', df=', nsDfs, ')', sep=''), collapse=' + '))
+			# model <- glm(form, data=data, family='binomial', weights=weight)
+			# save(model, file=paste0('./models/final_model_for_', tolower(ext), 'km_extent_with_', algo, '_', gcm, '_gcm.rda'))
+			
+			# # k-fold models
+			# for (subK in 1:numFolds) {
+
+				# # get column of folds matrix to use and the actual number identifying this fold
+				# thisFoldCol <- foldColumnsToModel[subK]
+				# thisFoldInteger <- foldInteger[subK]
+			
+				# # training and test data
+				# thisFolds <- folds[ , thisFoldCol]
+				# trains <- which(!is.na(thisFolds))
+				# tests <- which(is.na(thisFolds))
+				# thisTrainData <- data[trains, ]
+				# thisTestPres <- data[tests, ]
+				# thisTestPres <- thisTestPres[thisTestPres$presBg == 1, ]
+				# thisTestBg <- occsBg$testBg[occsBg$testBg$fold == foldInteger[subK], ]
+				
+				# # model and evaluation
+				# kModel <- glm(form, data=thisTrainData, family='binomial', weights=thisTrainData$weight)
+				# predsAtPres <- predict(kModel, thisTestPres, type='response')
+				# predsAtBg <- predict(kModel, thisTestBg, type='response')
+				
+				# cbi <- contBoyce(predsAtPres, predsAtBg, na.rm=TRUE)
+				
+				# evals <- rbind(
+					# evals,
+					# data.frame(
+						# algo = algo,
+						# gcm = gcm,
+						# extent_km = ext,
+						# fold = thisFoldInteger,
+						# cbi = cbi
+					# )
+				# )
+				
+			# }
+
 		# } # next GCM
 			
 	# } # next extent
 	
-# say('####################################################')
-# say('### analyze similarity between model projections ###')
-# say('####################################################')
-
-	# say('To reduce the number of ABC iterations required, we will try to reduce the number of ENM model outputs that are included in the analysis. To do this, we want to cluster ENM output and select a subset of models based on similarity.')
+	# write.csv(evals, './models/final_model_evaluations.csv', row.names=FALSE)
 	
-	# say('Metrics to consider for clustering:')
-	# say('Similarity between present-day predictions.')
-	# say('Similarity between LGM predictions.')
-
-	# algos <- c('glm', 'maxent')
+# say('###############################################')
+# say('### assess differences between model output ###')
+# say('###############################################')
 	
-	# ### get prediction rasters for present and LGM
+	# say('To help select the final models, we will do a cluster analysis on the rasters for the predictions for suitability in the present-day and 21 Kybp.', breaks=80)
+	
+	# if (exists('sqPred')) rm(sqPred)
+	# if (exists('lgmPred')) rm(lgmPred)
+	
+	# # get study region rasters for present and 21 Kybp, rescale so fully-available land cells are 1 and fully-covered glacial cells are NA
+	# studyRegionRasts <- brick('C:/Ecology/Drive/Research/ABC vs Biogeography/NSF_ABI_2018_2021/data_and_analyses/green_ash/study_region/!study_region_raster_masks/study_region_daltonIceMask_lakesMasked_linearIceSheetInterpolation.tif')
+	# sqMask <- studyRegionRasts[[nlayers(studyRegionRasts)]]
+	# lgmMask <- studyRegionRasts[[1]]
 
-	# # raster stacks for holding predictions
-	# if (exists('sq')) rm(sq)
-	# if (exists('lgm')) rm(lgm)
+	# # rescaled so cell with partial glacier range from 0 to 1 (1 = fully open, <1 = some glacier)
+	# sqGradMask <- calc(sqMask, fun=function(x) ifelse(x == 1, NA, 1 - x))
+	# lgmGradMask <- calc(lgmMask, fun=function(x) ifelse(x == 1, NA, 1 - x))
+
+	# # remove all cells with full glacier
+	# sqMask <- calc(sqMask, fun=function(x) ifelse(x == 1, NA, 1))
+	# lgmMask <- calc(lgmMask, fun=function(x) ifelse(x == 1, NA, 1))
+	
+	# for (gcm in gcms) {
+	
+		# sqClim <- getClimRasts(gcm=gcm, year=0, variables=predictors, rescale=TRUE, fillCoasts=FALSE)
+		# lgmClim <- getClimRasts(gcm=gcm, year=21000, variables=predictors, rescale=TRUE, fillCoasts=FALSE)
+	
+		# sqClim <- projectRaster(sqClim, sqMask)
+		# lgmClim <- projectRaster(lgmClim, lgmMask)
+
+		# sqNames <- names(sqClim)
+		# sqClim <- sqClim * sqMask
+		# names(sqClim) <- sqNames
+	
+		# lgmNames <- names(lgmClim)
+		# lgmClim <- lgmClim * lgmMask
+		# names(lgmClim) <- lgmNames
+	
+		# for (ext in exts) {
+	
+			# for (algo in c('brt', 'glm', 'maxent', 'ns')) {
+			
+				# say(gcm, ' ', ext, '-km extent ', algo)
+			
+				# load(paste0('./models/final_model_for_', tolower(ext), 'km_extent_with_', algo, '_', gcm, '_gcm.rda'))
+			
+				# thisSqPred <- raster::predict(sqClim, model, fun=enmSdm::predictEnmSdm)
+				# thisLgmPred <- raster::predict(lgmClim, model, fun=enmSdm::predictEnmSdm)
+				
+				# thisSqPred <- thisSqPred * sqGradMask
+				# thisLgmPred <- thisLgmPred * lgmGradMask
+				
+				# names(thisSqPred) <- names(thisLgmPred) <- paste0(gcm, '_', ext, 'kmExtent_', algo)
+				
+				# sqPred <- if (exists('sqPred')) {
+					# stack(sqPred, thisSqPred)
+				# } else {
+					# thisSqPred
+				# }
+				
+				# lgmPred <- if (exists('lgmPred')) {
+					# stack(lgmPred, thisLgmPred)
+				# } else {
+					# thisLgmPred
+				# }
+			
+			# } # next algorithm
+	
+		# } # extent
+	
+	# } # next GCM
+
+	# ### cluster analysis
+	# # take sum of square differences as measure of difference between rasters
+	# sqDiffs <- lgmDiffs <- matrix(NA, nrow=nlayers(sqPred), ncol=nlayers(sqPred))
+	# colnames(sqDiffs) <- colnames(lgmDiffs) <- names(sqPred)
+
+	# for (i in 1:nlayers(sqPred)) {
+	
+		# for (j in 1:nlayers(sqPred)) {
+	
+			# # present-day
+			# diffs <- sqPred[[i]] - sqPred[[j]]
+			# n <- cellStats(diffs * 0 + 1, 'sum')
+			# diffs <- diffs^2
+			# diffs <- cellStats(diffs, 'sum')
+			# sqDiffs[j, i] <- diffs / n
+			
+			# # LGM
+			# diffs <- lgmPred[[i]] - lgmPred[[j]]
+			# n <- cellStats(diffs * 0 + 1, 'sum')
+			# diffs <- diffs^2
+			# diffs <- cellStats(diffs, 'sum')
+			# lgmDiffs[j, i] <- diffs / n
+			
+		# }
+	
+	# }
+		
+	# sqDiffs <- lgmDiffs <- matrix(NA, nrow=nlayers(sqPred), ncol=nlayers(sqPred))
+	# colnames (sqDiffs) <- rownames(sqDiffs) <- colnames(lgmDiffs) <- rownames(lgmDiffs) <- names(sqPred)
+		
+	# for (i in 1:nlayers(sqPred)) {
+		# for (j in 1:nlayers(sqPred)) {
+			
+			# diffs <- sqPred[[i]] - sqPred[[j]]
+			# diffs <- diffs^2
+			# n <- cellStats(diffs * 0 + 1, 'sum')
+			# sqDiffs[i, j] <- cellStats(diffs, 'sum') / n
+			
+			# diffs <- lgmPred[[i]] - lgmPred[[j]]
+			# diffs <- diffs^2
+			# n <- cellStats(diffs * 0 + 1, 'sum')
+			# lgmDiffs[i, j] <- cellStats(diffs, 'sum') / n
+			
+		# }
+	# }
+				
+	# # sqClust <- hclust(as.dist(sqDiffs))
+	# # lgmClust <- hclust(as.dist(lgmDiffs))
+	
+	# clust0ybp <- agnes(as.dist(sqDiffs), diss=TRUE, method='average')
+	# clust21000ybp <- agnes(as.dist(lgmDiffs), diss=TRUE, method='average')
+	
+	# save(clust0ybp, file='./figures_and_tables/agnes_cluster_of_models_based_on_rasters_0ybp.rda')
+	# save(clust21000ybp, file='./figures_and_tables/agnes_cluster_of_models_based_on_rasters_21000ybp.rda')
+	
+	# png('./figures_and_tables/clustering_of_prediction_rasters_0ybp.png', width=1600, height=800)
+		# par(cex=1.6)
+		# plot(clust0ybp, main='Present-day differences', which.plot=2)
+	# dev.off()
+
+	# png('./figures_and_tables/clustering_of_prediction_rasters_21ybp.png', width=1600, height=800)
+		# par(cex=1.6)
+		# plot(clust21000ybp, main='LGM differences', which.plot=2)
+	# dev.off()
+
+# say('###################################')
+# say('### project models back in time ###')
+# say('###################################')
+
+	# say('Write prediction rasters. Predictions are first written to each time period represented by the climate rasters, then interpolated to 30-yr intervals. They are then re-projected to an equal-area projection and masked by the study region rasters.', breaks=80)
+	
+	# # get study region rasters for present and 21 Kybp, rescale so fully-available land cells are 1 and fully-covered glacial cells are NA
+	# studyRegionRasts <- brick('C:/Ecology/Drive/Research/ABC vs Biogeography/NSF_ABI_2018_2021/data_and_analyses/green_ash/study_region/!study_region_raster_masks/study_region_daltonIceMask_lakesMasked_linearIceSheetInterpolation.tif')
+
+	# names(studyRegionRasts) <- paste0('year', seq(21000, 0, by=-30), 'ybp')
 	
 	# for (ext in exts) {
-		# for (gcm in gcms) {
+
+		# for (algo in algos) {
+		
+			# for (gcm in gcms) {
+			
+				# say(gcm, ' ', ext, '-km extent ', algo)
+				
+				# load(paste0('./models/final_model_for_', tolower(ext), 'km_extent_with_', algo, '_', gcm, '_gcm.rda'))
+		
+				# if (exists('preds')) rm(preds)
+				# for (year in rastTimes) {
+			
+					# clim <- getClimRasts(gcm=gcm, year=year, variables=predictors, rescale=TRUE, fillCoasts=FALSE)
+					# thisPred <- raster::predict(clim, model, fun=enmSdm::predictEnmSdm)
+					
+					# preds <- if (exists('preds')) {
+						# stack(preds, thisPred)
+					# } else {
+						# thisPred
+					# }
+		
+				# } # next year
+				
+				# # re-project and interpolate
+				# preds <- interpolateRasters(preds, interpFrom=rastTimes, interpTo=seq(21000, 0, by=-30))
+				# preds <- projectRaster(preds, studyRegionRasts)
+				
+				# # mask by study region and force values to be within [0, 1] (can get pushed outside this during re-projection)
+				# for (i in 1:nlayers(preds)) {
+					
+					# landMask <- (1 - studyRegionRasts[[i]])
+					# preds[[i]] <- preds[[i]] * landMask
+					
+					# preds[[i]] <- calc(preds[[i]], fun=function(x) ifelse(x < 0, 0, x))
+					# preds[[i]] <- calc(preds[[i]], fun=function(x) ifelse(x > 1, 1, x))
+					
+				# }
+				
+				# names(preds) <- paste0('year', seq(21000, 0, by=-30), 'ybp')
+				# writeRaster(preds, paste0('./predictions/', gcm, '_', ext, 'kmExtent_', algo))
+				
+			# } # next GCM
+			
+		# } # next algorithm
+		
+	# } # next GCM
+
+# say('################################')
+# say('### make maps of predictions ###')
+# say('################################')
+
+	# # study region
+	# studyRegionRasts <- brick('C:/Ecology/Drive/Research/ABC vs Biogeography/NSF_ABI_2018_2021/data_and_analyses/green_ash/study_region/!study_region_raster_masks/study_region_daltonIceMask_lakesMasked_linearIceSheetInterpolation.tif')
+
+	# # map extent
+	# plotExtent <- extent(namSpAlbStudyRegion)
+	# plotExtent <- as(plotExtent, 'SpatialPolygons')
+	# projection(plotExtent) <- projection(namSpAlbStudyRegion)
+	
+	# ### load prediction stacks
+	# preds <- list()
+	# for (gcm in gcms) {
+		# for (ext in exts) {
 			# for (algo in algos) {
-
-				# idString <- paste0(gcm, '_', algo, '_for_', tolower(ext))
-				# thisPreds <- stack(paste0('./predictions/predictions_', idString, '_extent.tif'))
-
-				# thisSq <- thisPreds[[1]]
-				# thisLgm <- thisPreds[[nlayers(thisPreds)]]
-				
-				# maxPred <- max(c(cellStats(thisSq, 'max'), cellStats(thisLgm, 'max')))
-				
-				# thisSq <- thisSq / maxPred
-				# thisLgm <- thisLgm / maxPred
-				
-				# names(thisSq) <- names(thisLgm) <- idString
-
-				# sq <- if (exists('sq')) {
-					# stack(sq, thisSq)
-				# } else {
-					# thisSq
-				# }
-				
-				# lgm <- if (exists('lgm')) {
-					# stack(lgm, thisLgm)
-				# } else {
-					# thisLgm
-				# }
-
-			# } # algo
-		# } # GCM
-	# } # extent
-	
-	# ### calculate similarity between predictions
-	
-	# sqArea <- area(sq, na.rm=TRUE, weights=TRUE)
-	# lgmArea <- area(lgm, na.rm=TRUE, weights=TRUE)
-				
-	# sqArea <- values(sqArea)
-	# lgmArea <- values(lgmArea)
-				
-	# sqAreaWeights <- sum(sqArea, na.rm=TRUE)
-	# lgmAreaWeights <- sum(lgmArea, na.rm=TRUE)
-
-	# # status quo
-	# sqDiffs <- matrix(NA, nlayers(sq), nlayers(sq))
-	# colnames(sqDiffs) <- rownames(sqDiffs) <- names(sq)
-	
-	# for (i in 1L:nlayers(sq)) {
-		# for (j in 1L:nlayers(sq)) {
-		
-			# diff <- (sq[[i]] - sq[[j]])
-			# diff <- abs(diff)
-			# diff <- values(diff)
-			# diff <- sum(diff * sqArea, na.rm=TRUE) / sqAreaWeights
-			
-			# sqDiffs[i, j] <- diff
-		
+				# thesePreds <- brick(paste0('./predictions/', gcm, '_', ext, 'kmExtent_', algo, '.tif'))
+				# names(thesePreds) <- paste0('year', seq(21000, 0, by=-30), 'ybp')
+				# preds[[length(preds) + 1]] <- thesePreds
+				# names(preds)[[length(preds)]] <- paste0(gcm, '_', ext, 'kmExtent_', algo)
+			# }
 		# }
 	# }
-	
-	# # LGM
-	# lgmDiffs <- matrix(NA, nlayers(lgm), nlayers(lgm))
-	# colnames(lgmDiffs) <- rownames(lgmDiffs) <- names(lgm)
-	
-	# for (i in 1L:nlayers(lgm)) {
-		# for (j in 1L:nlayers(lgm)) {
-		
-			# diff <- (lgm[[i]] - lgm[[j]])
-			# diff <- abs(diff)
-			# diff <- values(diff)
-			# diff <- sum(diff * lgmArea, na.rm=TRUE) / lgmAreaWeights
-			
-			# lgmDiffs[i, j] <- diff
-		
-		# }
-	# }
-	
-	# sqDiffs <- as.dist(sqDiffs)
-	# lgmDiffs <- as.dist(lgmDiffs)
 
-	# sqClust <- hclust(sqDiffs)
-	# lgmClust <- hclust(lgmDiffs)
+	# # clustering
+	# load('./figures_and_tables/agnes_cluster_of_models_based_on_rasters_21000ybp.rda')
+	# clustMembership <- cutree(clust21000ybp, k=numModelClusts)
+	# names(clustMembership) <- clust21000ybp$order.lab
+
+	# # suitability raster colors
+	# cols <- c('#fff7bc', '#99d8c9', '#66c2a4', '#238b45', '#00441b')
 	
-	# png('./figures_and_tables/clustering_of_prediction_rasters.png', width=1600, height=800)
-		# par(mfrow=c(1, 2), cex=1.6)
-		# plot(sqClust, main='Present-day differences')
-		# plot(lgmClust, main='LGM differences')
-	# dev.off()
+	# ### plot
+	# dirCreate('./figures_and_tables/series')
 	
-	# png('./figures_and_tables/prediction_rasters_present.png', width=1600, height=800)
-		# par(cex.main=3, mfrow=c(2, 4))
-		# for (i in 1:nlayers(sq)) plot(sq[[i]], main=names(sq)[i])
-	# dev.off()
-	
-	# png('./figures_and_tables/prediction_rasters_lgm.png', width=1600, height=800)
-		# par(cex.main=3, mfrow=c(2, 4))
-		# for (i in 1:nlayers(lgm)) plot(lgm[[i]], main=names(lgm)[i])
-	# dev.off()
-	
+	# conts <- list() # contours of LGM rasters
+	# years <- seq(21000, 0, by=-30)
+	# for (countYear in seq_along(years)) {
+		
+		# year <- years[countYear]
+		# say(year)
+		
+		# if (year %% 210 == 0) {
+
+			# png(paste0('./figures_and_tables/series/predicted_suitable_area_all_models_', prefix(21000 - year, 5), 'yr_after_21000ybp.png'), width=2400, height=1600)
+			# par(mfrow=c(4, 7), oma=c(2, 2, 4, 2), mar=c(0, 0, 6, 0))
+			
+				# count <- 1
+				# plot(0, 0, fg='white', xaxt='n', yaxt='n', main='', xlim=c(0, 1), ylim=c(0, 1), ann=FALSE)
+			
+				# for (algo in algos) {
+					# for (gcm in gcms) {
+						# for (ext in exts) {
+
+							# # empty plots for time slider
+							# if (count %% 7 == 0) {
+								# plot(0, 0, fg='white', xaxt='n', yaxt='n', main='', xlim=c(0, 1), ylim=c(0, 1), ann=FALSE)
+								# count <- count + 1
+							# }
+							
+							# # time slider
+							# if (count == 22) {
+								# mult <- 1.15 # relative height
+								# y <- (1 - (year / 21000)) * 3.95 * mult * 1
+								# lines(c(0.5, 0.5), c(0, 3.95 * mult * 1), lwd=50, col='gray70', xpd=NA)
+								# lines(c(0.5, 0.5), c(0, y), lwd=50, col='gray20', xpd=NA)
+								# text(0.5, 0.17 + y, labels=paste(year, 'ybp'), cex=7, xpd=NA)
+							# }
+							
+							# thisOne <- paste0(gcm, '_', ext, 'kmExtent_', algo)
+							# boxCol <- clustCols[clustMembership[[thisOne]]]
+							# plot(plotExtent, border=NA, col='gray90', ann=FALSE, main='')
+
+							# year500 <- 500 * ceiling(year / 500)
+							# land <- getClimRasts('ccsm', year=year500, variables=predictors[1], rescale=FALSE)
+							# land <- land * 0
+							# land <- projectRaster(land, crs=projection(plotExtent))
+							# land <- crop(land, plotExtent)
+							# plot(land, col='gray80', legend=FALSE, add=TRUE)
+							# plot(namSpAlbStudyRegion, lwd=0.2, add=TRUE)
+							
+							# plot(plotExtent, border=boxCol, lwd=10, add=TRUE)
+							# x <- preds[[thisOne]][[countYear]]
+							# plot(x, legend=FALSE, add=TRUE, col=cols, breaks=seq(0, 1, by=0.2))
+							
+							# ice <- studyRegionRasts[[countYear]]
+							# ice <- calc(ice, fun=function(x) ifelse(x == 1, 1, NA))
+							# # plot(ice, col='darkslategray3', legend=FALSE, add=TRUE)
+							# plot(ice, col='steelblue1', legend=FALSE, add=TRUE)
+							
+							# # plot(namSpAlbStudyRegion, add=TRUE, lwd=0.2, border='gray20')
+							
+							# if (year == 21000) {
+								# quant <- quantile(x, 0.95)
+								# conts[[length(conts) + 1]] <- rasterToContour(x, level=quant)
+								# names(conts)[length(conts)] <- thisOne
+							# }
+							
+							# plot(conts[[thisOne]], add=TRUE)
+							
+							# main <- paste(toupper(gcm), '\n', ext, '-km extent ', toupper(algo), collapse='', sep='')
+							# title(main, line=0, cex.main=3.3, xpd=NA)
+							
+							# count <- count + 1
+						
+						# }
+					# }
+				# }
+				
+			# # mtext(paste(year, 'YBP'), outer=TRUE, xpd=NA, cex=4, font=2)
+			# mtext(date(), side=1, cex=1, outer=TRUE)
+
+			# dev.off()
+			
+		# }
+				
+	# }
+		
 # say('#################################')
 # say('### calculate biotic velocity ###')
 # say('#################################')
 
-	# algos <- c('glm', 'maxent')
-	
-	# # # NB times are 0 at LGM, 21000 at present
-	# times <- c(0, 21000)
-	# atTimes <- c(0, 21000)
-	
-	# # times <- seq(0, 21000, by=30)
-	# # atTimes <- seq(0, 21000, by=30)
-	
-	# metrics <- c('centroid', 'nsCentroid', 'prevalence')
+	# say('Cycle through time intervals and whether or not to consider velocity in only shared cells or all cells.')
 
-	# velocities <- data.frame()
+	# # NB times are 0 at LGM, 21000 at present
+	# times <- seq(-21000, 0, by=30)
 	
-	# for (ext in exts) {
-		# for (gcm in gcms) {
-			# for (algo in algos) {
+	# for (interval in c(30, 990)) {
+	
+		# for (onlyInSharedCells in c(TRUE, FALSE)) {
 			
-				# say(paste(ext, gcm, algo))
-
-				# # get predictions
-				# idString <- paste0(gcm, '_', algo, '_for_', tolower(ext))
-				# preds <- stack(paste0('./predictions/predictions_', idString, '_extent.tif'))
-				# preds <- subset(preds, c(1, nlayers(preds)))
+			# atTimes <- seq(-21000, 0, by=interval)
+			# velocities <- data.frame()
 				
-				# # project to equal-area
-				# preds <- projectRaster(preds, crs=getCRS('albersNA'))
-				# preds <- round(preds)
+			# say('')
+			
+			# for (ext in exts) {
+				# for (gcm in gcms) {
+					# for (algo in algos) {
+					
+						# say(paste(ext, gcm, algo, interval, onlyInSharedCells))
 
-				# # biotic velocity
-				# thisVelocity <- bioticVelocity(preds, times=times, atTimes=atTimes, metrics=metrics)
-				
-				# # remember
-				# velocities <- rbind(
-					# velocities,
-					# cbind(
-						# data.frame(
-							# ext = tolower(ext),
-							# gcm = gcm,
-							# algo = algo
-						# ),
-						# thisVelocity
-					# )
-				# )
+						# # get predictions
+						# preds <- brick(paste0('./predictions/', gcm, '_', ext, 'kmExtent_', algo, '.tif'))
+						
+						# # biotic velocity
+						# thisVelocity <- bioticVelocity(preds, times=times, atTimes=atTimes, onlyInSharedCells=onlyInSharedCells)
+						
+						# # remember
+						# velocities <- rbind(
+							# velocities,
+							# cbind(
+								# data.frame(
+									# ext = tolower(ext),
+									# gcm = gcm,
+									# algo = algo,
+									# onlyInSharedCells = onlyInSharedCells
+								# ),
+								# thisVelocity
+							# )
+						# )
 
+					# }
+				# }
 			# }
-		# }
-	# }
+			
+			# cells <- if (onlyInSharedCells) { 'allCells'} else { 'sharedCells' }
+			# write.csv(velocities, paste0('./figures_and_tables/biotic_velocities_', interval, 'YrIntervals_', cells, '.csv'), row.names=FALSE)
+			
+		# } # next in shared cells
+		
+	# } # next interval
 	
-	# write.csv(velocities, './figures_and_tables/biotic_velocities_0_to_21Kybp.csv', row.names=FALSE)
-	
-# say('############################################')
-# say('### plot potential total population size ###')
-# say('############################################')
+say('############################')
+say('### plot biotic velocity ###')
+say('############################')
 
-	# (velocities <-  read.csv('./figures_and_tables/biotic_velocities_0_to_21Kybp_by_30yr.csv')
+	# clustering
+	load('./figures_and_tables/agnes_cluster_of_models_based_on_rasters_21000ybp.rda')
+	clustMembership <- cutree(clust21000ybp, k=numModelClusts)
+	names(clustMembership) <- clust21000ybp$order.lab
 
-	# years <- seq(21000 - 30, 0, by=-30)
+	# load velocities
+	for (interval in c(30, 990)) {
+		for (onlyInSharedCells in c(TRUE, FALSE)) {
+
+			cells <- if (onlyInSharedCells) { 'allCells'} else { 'sharedCells' }
+			x <- read.csv(paste0('./figures_and_tables/biotic_velocities_', interval, 'YrIntervals_', cells, '.csv'))
+			cells <- capIt(cells)
+			assign(paste0('bv', interval, 'Yr', cells), x)
+			
+		}
+	}
+
+	metrics <- c('centroidVelocity', 'nsQuantVelocity_quant0p05', 'nsQuantVelocity_quant0p95')
 	
-	# plot(1, 1, col='white', ylim=c(0, 1), xlim=c(21000, 0), ylab='Mean suitability', xlab='Ybp')
-	# lines(years, rev(velocities$prevalence[velocities$ext == 'broad' & velocities$gcm == 'ccsm' & velocities$algo == 'glm']), col='black', lwd=2)
-	# lines(years, rev(velocities$prevalence[velocities$ext == 'narrow' & velocities$gcm == 'ccsm' & velocities$algo == 'glm']), col='red', lwd=2)
-	# lines(years, rev(velocities$prevalence[velocities$ext == 'broad' & velocities$gcm == 'ccsm' & velocities$algo == 'maxent']), col='purple', lwd=2)
-	# lines(years, rev(velocities$prevalence[velocities$ext == 'narrow' & velocities$gcm == 'ccsm' & velocities$algo == 'maxent']), col='orange', lwd=2)
+	for (metric in metrics) {
+			
+		metricNice <- if (metric == 'centroidVelocity') {
+			'Centroid Velocity'
+		} else if (metric == 'nsQuantVelocity_quant0p95') {
+			'Velocity of Northern Range Edge (95th quantile)'
+		} else if (metric == 'nsQuantVelocity_quant0p05') {
+			'Velocity of Southern Range Edge (5th quantile)'
+		}
 	
-	# lines(years, rev(velocities$prevalence[velocities$ext == 'broad' & velocities$gcm == 'ecbilt' & velocities$algo == 'glm']), col='black', lty='dotted', lwd=2)
-	# lines(years, rev(velocities$prevalence[velocities$ext == 'narrow' & velocities$gcm == 'ecbilt' & velocities$algo == 'glm']), col='red', lty='dotted', lwd=2)
-	# lines(years, rev(velocities$prevalence[velocities$ext == 'broad' & velocities$gcm == 'ecbilt' & velocities$algo == 'maxent']), col='purple', lty='dotted', lwd=2)
-	# lines(years, rev(velocities$prevalence[velocities$ext == 'narrow' & velocities$gcm == 'ecbilt' & velocities$algo == 'maxent']), col='orange', lty='dotted', lwd=2)
-	
-	# legend('bottomright',
-		# legend=c(
-			# 'CCSM GLM Broad',
-			# 'CCSM GLM Narrow',
-			# 'CCSM Maxent Broad',
-			# 'CCSM Maxent Narrow',
-			# 'ECBilt GLM Broad',
-			# 'ECBilt GLM Narrow',
-			# 'ECBilt Maxent Broad',
-			# 'ECBilt Maxent Narrow'
-		# ),
-		# col=c(
-			# 'black',
-			# 'red',
-			# 'purple',
-			# 'orange'
-		# ),
-		# lty=c(
-			# 'solid',
-			# 'solid',
-			# 'solid',
-			# 'solid',
-			# 'dotted',
-			# 'dotted',
-			# 'dotted',
-			# 'dotted'
-		# ),
-		# pch=NA,
-		# bty='n',
-		# lwd=3
-	# )	
-	
+		png(paste0('./figures_and_tables/bioticVelocity_', metric, '.png'), width=1.5 * 1280, height=1.5 * 720)
+			
+			par(mfrow=c(2, 2), oma=c(1, 1, 3, 1), cex.main=2.2, cex.lab=2, cex.axis=1.8)
+
+			for (interval in c(30, 990)) {
+				
+				# get maximum velocity across models
+				minVel <- Inf
+				maxVel <- -Inf
+				for (onlyInSharedCells in c(TRUE, FALSE)) {
+			
+					cells <- if (onlyInSharedCells) { 'allCells'} else { 'sharedCells' }
+					cells <- capIt(cells)
+					x <- get(paste0('bv', interval, 'Yr', cells))
+					minVel <- min(c(minVel, x[ , metric]))
+					maxVel <- max(c(maxVel, x[ , metric]))
+					
+					assign(paste0('bv', interval, 'Yr', cells), x)
+					
+				}
+				
+				minVel <- min(0, minVel)
+
+				for (onlyInSharedCells in c(FALSE, TRUE)) {
+				
+					cells <- if (onlyInSharedCells) { 'allCells'} else { 'sharedCells' }
+					cells <- capIt(cells)
+					x <- get(paste0('bv', interval, 'Yr', cells))
+
+					# plot
+					main <- paste0(
+						metricNice,
+						if (onlyInSharedCells) { ' | Shared Cells' } else { ' | All Cells' },
+						' | ', interval, '-yr Time Steps'
+					)
+
+					plot(0, 0, col='white', xlim=c(-21000, 0), ylim=c(minVel, maxVel), xlab='YBP', ylab='Velocity (m / y)', main=main)
+					
+					for (i in seq(-21000, 0, by=500)) {
+						lines(c(i, i), c(minVel, maxVel), lwd=0.2, col='gray')
+					}
+				
+					for (gcm in gcms) {
+						for (ext in exts) {
+							for (algo in algos) {
+								
+								thisVel <- x[x$gcm == gcm & x$ext == ext & x$algo == algo & x$onlyInSharedCells == onlyInSharedCells, ]
+								modelGroup <- paste0(gcm, '_', ext, 'kmExtent_', algo)
+								group <- clustMembership[[modelGroup]]
+								
+								col <- clustCols[group]
+								
+								years <- rowMeans(thisVel[ , c('timeFrom', 'timeTo')])
+								lines(years, thisVel[ , metric], col=col, lwd=2)
+								
+							}
+						}
+					}
+					
+					# legend('topleft', inset=-0.01, legend=paste0('Group', 1:numModelClusts), col=clustCols[1:numModelClusts], lwd=1, cex=0.5, box.col='white')
+					
+				} # next only in shared cells
+				
+			} # next interval
+			
+			title(sub=date(), outer=TRUE, line=-1)
+			title(main=metricNice, outer=TRUE, line=0.8, cex.main=2.9)
+			
+		dev.off()
+		
+	} # next metric
+			
 #############################################
 say('DONE', deco='~', pre=2, post=2, level=1)
