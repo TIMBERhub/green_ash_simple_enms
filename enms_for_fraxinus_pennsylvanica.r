@@ -54,6 +54,7 @@
 		# setwd('C:/Ecology/Drive/Research/ABC vs Biogeography/NSF_ABI_2018_2021/data_and_analyses/green_ash/enms')
 		# lorenzPath <- 'D:/Ecology/Climate/Lorenz et al 2016 North America 21Kybp to 2100 CE/V2/'
 		# studyRegionRastsFileName <- 'C:/Ecology/Drive/Research/ABC vs Biogeography/NSF_ABI_2018_2021/data_and_analyses/green_ash/study_region/!study_region_raster_masks/study_region_daltonIceMask_lakesMasked_linearIceSheetInterpolation.tif'
+		# elevationRastFileName <- 'D:/Ecology/Drive/Research/ABC vs Biogeography/NSF_ABI_2018_2021/data_and_analyses/green_ash/study_region/!study_region_raster_masks/study_region_elevationInMeters_fromEtop.tif'
 		# tempDir <- 'D:/ecology/!Scratch/_temp'
 	
 	### setup to run on WORK computer
@@ -63,6 +64,7 @@
 		setwd('E:/Ecology/Drive/Research/ABC vs Biogeography/NSF_ABI_2018_2021/data_and_analyses/green_ash/enms')
 		lorenzPath <- 'E:/Ecology/Climate/Lorenz et al 2016 North America 21Kybp to 2100 CE/V2/'
 		studyRegionRastsFileName <- 'E:/Ecology/Drive/Research/ABC vs Biogeography/NSF_ABI_2018_2021/data_and_analyses/green_ash/study_region/!study_region_raster_masks/study_region_daltonIceMask_lakesMasked_linearIceSheetInterpolation.tif'
+		elevationRastFileName <- 'E:/Ecology/Drive/Research/ABC vs Biogeography/NSF_ABI_2018_2021/data_and_analyses/green_ash/study_region/!study_region_raster_masks/study_region_elevationInMeters_fromEtop.tif'
 		tempDir <- 'E:/ecology/!Scratch/_temp'
 	
 	# ### setup to run on POWERBANK
@@ -72,6 +74,7 @@
 		# setwd('H:/Global Change Program/Research/ABC for Biogeographic History of Trees')
 		# lorenzPath <- './!lorenz_et_al/V2/'
 		# studyRegionRastsFileName <- './!study_region_raster_masks/study_region_daltonIceMask_lakesMasked_linearIceSheetInterpolation.tif' # for POWERBANK computers
+		# elevationRastFileName <- 'H:/Ecology/Drive/Research/ABC vs Biogeography/NSF_ABI_2018_2021/data_and_analyses/green_ash/study_region/!study_region_raster_masks/study_region_elevationInMeters_fromEtop.tif'
 		# tempDir <- 'E:/ecology/!Scratch/_temp'
 
 	options(stringsAsFactors=FALSE)
@@ -1567,86 +1570,99 @@ say('#################################')
 say('### calculate biotic velocity ###')
 say('#################################')
 
-	say('Cycle through: time intervals (30, 990 yr); spatial resolution of cells; whether or not to consider velocity in only shared cells or all cells; and whether or not to examine velocity in only cells that never had ice and were always land across all time periods.', breaks=80)
+	say('Cycle through: time intervals (30, 60, ..., 990 yr); spatial resolution of cells; whether or not to consider velocity in only shared cells or all cells; whether or not to include elevation in calculations; and whether or not to examine velocity in only cells that never had ice and were always land across all time periods.', breaks=80)
 
 	rescaleFactor <- 4 # factor by which to divide/multiply cell linear dimension to resample to fine/coarse resolution
 
-	# NB times are 0 at LGM, 21000 at present
+	# times represented by suitability rasters
 	times <- seq(-21000, 0, by=30)
 	
 	# resolutions at which to analyze velocity
 	resols <- c('coarse', 'native', 'fine')
-	# resols <- c('native')
 	
+	# time intervals at which to calculate velocities
+	intervals <- c(30, 60, 120, 240, 480, 990, 21000)
+
+	# to store it all
 	velocities <- data.frame()
-	velocities <- read.csv('E:/Ecology/Drive/Research/ABC vs Biogeography/NSF_ABI_2018_2021/data_and_analyses/green_ash/enms/figures_and_tables/!velocities_TEMP.csv')
 	
 	# allowing land and glaciers to shift
-	for (interval in c(30, 990)) {
+	for (interval in intervals) {
 	
-		# for (onlyInSharedCells in c(TRUE, FALSE)) {
-		for (onlyInSharedCells in c(FALSE)) {
-			
-			atTimes <- seq(-21000, 0, by=interval)
+		atTimes <- seq(-21000, 0, by=interval)
 				
-			say('')
+		for (onlyInSharedCells in c(TRUE, FALSE)) {
 			
 			for (ext in exts) {
 				for (gcm in gcms) {
 					for (algo in algos) {
-					
-						# get predictions
-						preds <- brick(paste0('./predictions/', gcm, '_', ext, 'kmExtent_', algo, '.tif'))
+						for (elev in c(TRUE, FALSE)) {
 						
-						for (thisRes in resols) {
+							# get predictions
+							preds <- brick(paste0('./predictions/', gcm, '_', ext, 'kmExtent_', algo, '.tif'))
 							
-							say(paste(ext, gcm, algo, interval, onlyInSharedCells, thisRes, 'dynamic land', date()))
-
-							if (thisRes == 'coarse') {
-							
-								template <- raster(nrows=nrow(preds) / rescaleFactor, ncol=ncol(preds) / rescaleFactor, crs=projection(preds), ext=extent(preds))
-								thisPreds <- projectRaster(preds, template)
+							for (thisRes in resols) {
 								
-								thisPreds <- calc(thisPreds, fun=function(x) ifelse(x < 0, 0, x))
-								thisPreds <- calc(thisPreds, fun=function(x) ifelse(x > 1, 1, x))
+								say('ext', ext, ' | gcm ', gcm, ' | algo ', algo, ' | interval ', interval, ' | shared cells ', onlyInSharedCells, ' | res ', thisRes, ' | dynamic land | elevation ', elev, ' | ', date())
+
+								elevation <- if (elev) {
+									raster(elevationRastFileName)
+								} else {
+									NULL
+								}
+						
+								if (thisRes == 'coarse') {
 								
-							} else if (thisRes == 'fine') {
-							
-								template <- raster(nrows=nrow(preds) * rescaleFactor, ncol=ncol(preds) * rescaleFactor, crs=projection(preds), ext=extent(preds))
-								thisPreds <- projectRaster(preds, template)
-							
-								thisPreds <- calc(thisPreds, fun=function(x) ifelse(x < 0, 0, x))
-								thisPreds <- calc(thisPreds, fun=function(x) ifelse(x > 1, 1, x))
+									template <- raster(nrows=nrow(preds) / rescaleFactor, ncol=ncol(preds) / rescaleFactor, crs=projection(preds), ext=extent(preds))
+									thisPreds <- projectRaster(preds, template)
+									
+									thisPreds <- calc(thisPreds, fun=function(x) ifelse(x < 0, 0, x))
+									thisPreds <- calc(thisPreds, fun=function(x) ifelse(x > 1, 1, x))
+									
+									if (elev) elevation <- projectRaster(elevation, template)
+									
+								} else if (thisRes == 'fine') {
+								
+									template <- raster(nrows=nrow(preds) * rescaleFactor, ncol=ncol(preds) * rescaleFactor, crs=projection(preds), ext=extent(preds))
+									thisPreds <- projectRaster(preds, template)
+								
+									thisPreds <- calc(thisPreds, fun=function(x) ifelse(x < 0, 0, x))
+									thisPreds <- calc(thisPreds, fun=function(x) ifelse(x > 1, 1, x))
+									
+									if (elev) elevation <- projectRaster(elevation, template)
 
-							} else if (thisRes == 'native') {
-								thisPreds <- preds
-							}
-							
-							# biotic velocity
-							thisVelocity <- bioticVelocity(thisPreds, times=times, atTimes=atTimes, onlyInSharedCells=onlyInSharedCells)
+								} else if (thisRes == 'native') {
+									thisPreds <- preds
+								}
+								
+								# biotic velocity
+								thisVelocity <- bioticVelocity(thisPreds, times=times, atTimes=atTimes, elevation=elevation, onlyInSharedCells=onlyInSharedCells, cores=4)
 
-							# remember
-							velocities <- rbind(
-								velocities,
-								cbind(
-									data.frame(
-										ext = tolower(ext),
-										gcm = gcm,
-										algo = algo,
-										onlyInSharedCells = onlyInSharedCells,
-										onlyInContinuouslyExposedLand = FALSE,
-										resolution = thisRes,
-										rescaleFactor = ifelse(thisRes == 'native', 1, rescaleFactor)
-									),
-									thisVelocity
+								gc()
+
+								# remember
+								velocities <- rbind(
+									velocities,
+									cbind(
+										data.frame(
+											ext = tolower(ext),
+											gcm = gcm,
+											algo = algo,
+											onlyInSharedCells = onlyInSharedCells,
+											onlyInContinuouslyExposedLand = FALSE,
+											resolution = thisRes,
+											rescaleFactor = ifelse(thisRes == 'native', 1, rescaleFactor),
+											elevation = elev
+										),
+										thisVelocity
+									)
 								)
-							)
-							
-						}
-
-					}
-				}
-			}
+								
+							} # next resolution
+						} # next elevation
+					} # next algo
+				} # next GCM
+			} # next extent
 			
 		} # next in shared cells
 		
@@ -1658,72 +1674,84 @@ say('#################################')
 	studyRegionExposedLandMask <- calc(studyRegionExposedLandMask, fun=function(x) ifelse(x %==na% 0, 1, NA))
 	
 	# using only cells that were never covered by glaciers and always land
-	for (interval in c(30, 990)) {
+	for (interval in intervals) {
 	
 		atTimes <- seq(-21000, 0, by=interval)
 			
-		say('')
-		
 		for (ext in exts) {
 			for (gcm in gcms) {
 				for (algo in algos) {
-				
-					# get predictions
-					preds <- brick(paste0('./predictions/', gcm, '_', ext, 'kmExtent_', algo, '.tif'))
-					preds <- studyRegionExposedLandMask * preds
-				
-					for (thisRes in resols) {
-						
-						say(paste(ext, gcm, algo, interval, onlyInSharedCells, thisRes, 'constant land', date()))
+					for (elev in c(TRUE, FALSE)) {
+					
+						# get predictions
+						preds <- brick(paste0('./predictions/', gcm, '_', ext, 'kmExtent_', algo, '.tif'))
+						preds <- studyRegionExposedLandMask * preds
 
-						if (thisRes == 'coarse') {
-						
-							template <- raster(nrows=nrow(preds) / rescaleFactor, ncol=ncol(preds) / rescaleFactor, crs=projection(preds), ext=extent(preds))
-							thisPreds <- projectRaster(preds, template)
+						for (thisRes in resols) {
 							
-							thisPreds <- calc(thisPreds, fun=function(x) ifelse(x < 0, 0, x))
-							thisPreds <- calc(thisPreds, fun=function(x) ifelse(x > 1, 1, x))
+							say('ext', ext, ' | gcm ', gcm, ' | algo ', algo, ' | interval ', interval, ' | shared cells ', onlyInSharedCells, ' | res ', thisRes, ' | constant land | elevation ', elev, ' | ', date())
+
+							elevation <- if (elev) {
+								raster(elevationRastFileName)
+							} else {
+								NULL
+							}
+						
+							if (thisRes == 'coarse') {
 							
-						} else if (thisRes == 'fine') {
-						
-							template <- raster(nrows=nrow(preds) * rescaleFactor, ncol=ncol(preds) * rescaleFactor, crs=projection(preds), ext=extent(preds))
-							thisPreds <- projectRaster(preds, template)
-						
-							thisPreds <- calc(thisPreds, fun=function(x) ifelse(x < 0, 0, x))
-							thisPreds <- calc(thisPreds, fun=function(x) ifelse(x > 1, 1, x))
+								template <- raster(nrows=nrow(preds) / rescaleFactor, ncol=ncol(preds) / rescaleFactor, crs=projection(preds), ext=extent(preds))
+								thisPreds <- projectRaster(preds, template)
+								
+								thisPreds <- calc(thisPreds, fun=function(x) ifelse(x < 0, 0, x))
+								thisPreds <- calc(thisPreds, fun=function(x) ifelse(x > 1, 1, x))
+								
+								if (elev) elevation <- projectRaster(elevation, template)
+								
+							} else if (thisRes == 'fine') {
+							
+								template <- raster(nrows=nrow(preds) * rescaleFactor, ncol=ncol(preds) * rescaleFactor, crs=projection(preds), ext=extent(preds))
+								thisPreds <- projectRaster(preds, template)
+							
+								thisPreds <- calc(thisPreds, fun=function(x) ifelse(x < 0, 0, x))
+								thisPreds <- calc(thisPreds, fun=function(x) ifelse(x > 1, 1, x))
+								
+								if (elev) elevation <- projectRaster(elevation, template)
 
-						} else if (thisRes == 'native') {
-							thisPreds <- preds
-						}
-						
-						# biotic velocity
-						thisVelocity <- bioticVelocity(thisPreds, times=times, atTimes=atTimes, onlyInSharedCells=onlyInSharedCells)
+							} else if (thisRes == 'native') {
+								thisPreds <- preds
+							}
+							
+							# biotic velocity
+							thisVelocity <- bioticVelocity(thisPreds, times=times, atTimes=atTimes, elevation=elevation, onlyInSharedCells=onlyInSharedCells, cores=4)
+							
+							gc()
 
-						# remember
-						velocities <- rbind(
-							velocities,
-							cbind(
-								data.frame(
-									ext = tolower(ext),
-									gcm = gcm,
-									algo = algo,
-									onlyInSharedCells = TRUE,
-									onlyInContinuouslyExposedLand = TRUE,
-									resolution = thisRes,
-									rescaleFactor = ifelse(thisRes == 'native', 1, rescaleFactor)
-								),
-								thisVelocity
+							# remember
+							velocities <- rbind(
+								velocities,
+								cbind(
+									data.frame(
+										ext = tolower(ext),
+										gcm = gcm,
+										algo = algo,
+										onlyInSharedCells = TRUE,
+										onlyInContinuouslyExposedLand = TRUE,
+										resolution = thisRes,
+										rescaleFactor = ifelse(thisRes == 'native', 1, rescaleFactor),
+										elevation = elev
+									),
+									thisVelocity
+								)
 							)
-						)
-						
+							
+						} # next elevation
 					} # next resolution
 				} # next algorithm
 			} # next GCM
 		} # next extent
-		
 	} # next interval
 
-	write.csv(velocities, './figures_and_tables/biotic_velocities.csv', row.names=FALSE)
+	save(velocities, file='./figures_and_tables/biotic_velocities.rda')
 	
 # say('############################')
 # say('### plot biotic velocity ###')
