@@ -24,12 +24,13 @@
 ### collate calibration/evaluation data ###
 ### calibrate models ###
 ### calibrate and evaluate final models ###
+### plot model performance against present-day data ###
 ### assess differences between model output ###
 ### project models back in time ###
-### make maps of predictions ###
 ### calculate biotic velocity ###
-### plot biotic velocity ###
-
+### plot biotic velocity for periods < 21 Ka ###
+### plot biotic velocity for periods of 21 Ka ###
+### make maps of predictions ###
 
 ### NOTES
 ### Variable naming conventions:
@@ -40,15 +41,43 @@
 ### setup ###
 #############
 
-	# source('C:/Ecology/Drive/Research/ABC vs Biogeography/NSF_ABI_2018_2021/data_and_analyses/green_ash/enms/code/enms_for_fraxinus_pennsylvanica.r')
-	# source('H:/Global Change Program/Research/ABC for Biogeographic History of Trees/code/enms_for_fraxinus_pennsylvanica.r')
-
 	memory.limit(memory.limit() * 2^30)
-	rm(list=ls())
+	rm(list=ls()) # reproducibility!
 	options(keep.source=FALSE) # manage memory
 	gc()
 	print('')
 	print(date())
+
+	# ### setup to run on Adam's computer
+		
+		# ### source('C:/Ecology/Drive/Research/ABC vs Biogeography/NSF_ABI_2018_2021/data_and_analyses/green_ash/enms/code/enms_for_fraxinus_pennsylvanica.r')
+
+		# setwd('C:/Ecology/Drive/Research/ABC vs Biogeography/NSF_ABI_2018_2021/data_and_analyses/green_ash/enms')
+		# lorenzPath <- 'D:/Ecology/Climate/Lorenz et al 2016 North America 21Kybp to 2100 CE/V2/'
+		# studyRegionRastsFileName <- 'C:/Ecology/Drive/Research/ABC vs Biogeography/NSF_ABI_2018_2021/data_and_analyses/green_ash/study_region/!study_region_raster_masks/study_region_daltonIceMask_lakesMasked_linearIceSheetInterpolation.tif'
+		# elevationRastFileName <- 'D:/Ecology/Drive/Research/ABC vs Biogeography/NSF_ABI_2018_2021/data_and_analyses/green_ash/study_region/!study_region_raster_masks/study_region_elevationInMeters_fromEtop.tif'
+		# tempDir <- 'D:/ecology/!Scratch/_temp'
+	
+	### setup to run on SHIGOTO computer
+		
+		### source('E:/Ecology/Drive/Research/ABC vs Biogeography/NSF_ABI_2018_2021/data_and_analyses/green_ash/enms/code/enms_for_fraxinus_pennsylvanica.r')
+
+		setwd('E:/Ecology/Drive/Research/ABC vs Biogeography/NSF_ABI_2018_2021/data_and_analyses/green_ash/enms')
+		lorenzPath <- 'E:/Ecology/Climate/Lorenz et al 2016 North America 21Kybp to 2100 CE/V2/'
+		studyRegionRastsFileName <- 'E:/Ecology/Drive/Research/ABC vs Biogeography/NSF_ABI_2018_2021/data_and_analyses/green_ash/study_region/!study_region_raster_masks/study_region_daltonIceMask_lakesMasked_linearIceSheetInterpolation.tif'
+		demoGeneticRasterTemplate <- 'E:/Ecology/Drive/Research/ABC vs Biogeography/NSF_ABI_2018_2021/data_and_analyses/green_ash/study_region/!study_region_raster_masks/study_region_resampled_to_genetic_demographic_simulation_resolution.tif'
+		elevationRastFileName <- 'E:/Ecology/Drive/Research/ABC vs Biogeography/NSF_ABI_2018_2021/data_and_analyses/green_ash/study_region/!study_region_raster_masks/study_region_elevationInMeters_fromEtop.tif'
+		tempDir <- 'E:/ecology/!Scratch/_temp'
+	
+	# ### setup to run on POWERBANK
+	
+		# ### source('H:/Global Change Program/Research/ABC for Biogeographic History of Trees/code/enms_for_fraxinus_pennsylvanica.r')
+		
+		# setwd('H:/Global Change Program/Research/ABC for Biogeographic History of Trees')
+		# lorenzPath <- './!lorenz_et_al/V2/'
+		# studyRegionRastsFileName <- './!study_region_raster_masks/study_region_daltonIceMask_lakesMasked_linearIceSheetInterpolation.tif' # for POWERBANK computers
+		# elevationRastFileName <- 'H:/Ecology/Drive/Research/ABC vs Biogeography/NSF_ABI_2018_2021/data_and_analyses/green_ash/study_region/!study_region_raster_masks/study_region_elevationInMeters_fromEtop.tif'
+		# tempDir <- 'E:/ecology/!Scratch/_temp'
 
 	options(stringsAsFactors=FALSE)
 	raster::rasterOptions(format='GTiff', overwrite=TRUE)
@@ -71,11 +100,6 @@
 	library(statisfactory) # Adam's statistics library (https://github.com/adamlilith/statisfactory)
 	library(legendary) # Adam's plotting library (https://github.com/adamlilith/legenday)
 	
-	setwd('C:/Ecology/Drive/Research/ABC vs Biogeography/NSF_ABI_2018_2021/data_and_analyses/green_ash/enms')
-	# setwd('H:/Global Change Program/Research/ABC for Biogeographic History of Trees')
-
-	# tempDir <- 'D:/ecology/!Scratch/_temp'
-	tempDir <- 'E:/ecology/!Scratch/_temp'
 	dirCreate(tempDir)
 	
 	dirCreate('./figures_and_tables')
@@ -107,7 +131,7 @@
 		# get current version of each variable
 		for (variable in variables) {
 		
-			rast <- stack(paste0('D:/Ecology/Climate/Lorenz et al 2016 North America 21Kybp to 2100 CE/V2/', gcmFolder, '/', year, 'BP/', variable, '.tif'))
+			rast <- stack(paste0(lorenzPath, '/', gcmFolder, '/', year, 'BP/', variable, '.tif'))
 			names(rast) <- variable
 
 			rasts <- if (exists('rasts', inherits=FALSE)) {
@@ -170,9 +194,6 @@
 	# buffer around occurrences ("accessible" area) used to define calibration area
 	exts <- c(80, 160, 320) # in km
 
-	# time periods represented by rasters
-	rastTimes <- seq(0, 21000, by=500)
-	
 	# generation time
 	genTime_yr <- 30 # generation time in year
 	genTimes <- seq(0, 21000, by=genTime_yr)
@@ -215,7 +236,7 @@
 	} else {
 	
 		# mask raster for entire projection region
-		maskRast <- raster('D:/Ecology/Climate/Lorenz et al 2016 North America 21Kybp to 2100 CE/V2/ccsm3_22-0k_all_tifs/0BP/an_avg_ETR.tif')
+		maskRast <- raster('D:/Ecology/Climate/Lorenz et al 2016 North America 21Kybp to 2100 CE/ccsm3_22-0k_all_tifs/0BP/an_avg_ETR.tif')
 		maskRast <- 0 * maskRast + 1
 		names(maskRast) <- 'mask'
 		
@@ -259,13 +280,13 @@
 
 	# say('Basemap data includes shapefiles of North American countries and the range maps of the species from BIEN and Little. We will create equal-area versions of each in an Albers projection (object names will be suffixed with "Alb")', breaks=80)
 
-	# study region
-	if (!file.exists('./regions/studyRegion.rda')) {
+	# # study region
+	# if (!file.exists('./regions/studyRegion.rda')) {
 	
-		studyRegionSpAlb <- shapefile('C:/Ecology/Drive/Research/ABC vs Biogeography/NSF_ABI_2018_2021/data_and_analyses/green_ash/study_region/study_region_spatial_polygons/study_region_mask_without_glaciers')
-		save(studyRegionSpAlb, file='./regions/studyRegion.rda')
+		# studyRegionSpAlb <- shapefile('C:/Ecology/Drive/Research/ABC vs Biogeography/NSF_ABI_2018_2021/data_and_analyses/green_ash/study_region/study_region_spatial_polygons/study_region_mask_without_glaciers')
+		# save(studyRegionSpAlb, file='./regions/studyRegion.rda')
 		
-	}
+	# }
 
 	# ### North America Level 2
 		
@@ -619,8 +640,8 @@
 		
 		# ### get set of randomly located points for assessing collinearity between variables
 		
-		# climCcsm_0ypb <- raster::stack(listFiles('D:/Ecology/Climate/Lorenz et al 2016 North America 21Kybp to 2100 CE/V2/ccsm3_22-0k_all_tifs/0BP', pattern='an_'))
-		# climEcbilt_0ypb <- raster::stack(listFiles('D:/Ecology/Climate/Lorenz et al 2016 North America 21Kybp to 2100 CE/V2/ecbilt_21-0k_all_tifs/0BP', pattern='an_'))
+		# climCcsm_0ypb <- raster::stack(listFiles('D:/Ecology/Climate/Lorenz et al 2016 North America 21Kybp to 2100 CE/ccsm3_22-0k_all_tifs/0BP', pattern='an_'))
+		# climEcbilt_0ypb <- raster::stack(listFiles('D:/Ecology/Climate/Lorenz et al 2016 North America 21Kybp to 2100 CE/ecbilt_21-0k_all_tifs/0BP', pattern='an_'))
 		
 		# # remove an_cv_ETR and an_cv_WDI
 		# keeps <- names(climCcsm_0ypb)[-which(names(climCcsm_0ypb) %in% c('an_cv_ETR', 'an_cv_WDI'))]
@@ -1080,9 +1101,6 @@
 	# evals <- data.frame() # k-fold evaluation statistics
 	
 	# for (countExtent in seq_along(exts)) {
-	# # for (countExtent in 1) { # POWERBANK #4
-	# # for (countExtent in 2) { # POWERBANK #3
-	# # for (countExtent in 3) { # POWERBANK #??
 
 		# ext <- exts[countExtent]
 	
@@ -1342,19 +1360,42 @@
 			
 	# } # next extent
 	
-	# write.csv(evals, './models/final_model_evaluations.csv', row.names=FALSE)
+	# write.csv(evals, './figures_and_tables/final_model_evaluations.csv', row.names=FALSE)
+	
+# say('#######################################################')
+# say('### plot model performance against present-day data ###')
+# say('#######################################################')
+
+	# evals <- read.csv('./figures_and_tables/final_model_evaluations.csv')
+
+	# evals$combos <- paste0(evals$gcm, ' ', evals$ext, '-km extent ', evals$algo)
+	
+	# n <- length(unique(evals$combos))
+
+	# png('./figures_and_tables/final_model_evaluations.png', width=1200, height=800)
+
+		# ylim <- c(roundTo(min(0, evals$cbi), 0.1, floor), 1)
+
+		# par(oma=c(15, 2, 1, 1), mar=c(5, 5, 4, 2), cex.lab=2, cex.axis=1.8)
+		# boxplot(cbi ~ combos, data=evals, ylim=ylim, ylab='CBI', xlab='', col='cornflowerblue', names=NA, xpd=NA)
+
+		# labels <- sort(unique(evals$combos))
+		# ylen <- diff(ylim)
+		# text(1:n, rep(ylim[1] - 0.07 * ylen, n), labels=labels, srt=90, xpd=NA, cex=1.8, adj=c(1, 0.5))
+		
+	# dev.off()
 	
 # say('###############################################')
 # say('### assess differences between model output ###')
 # say('###############################################')
 	
-	# say('To help select the final models, we will do a cluster analysis on the rasters for the predictions for suitability in the present-day and 21 Kybp.', breaks=80)
+	# say('To help select the final models, we will do a cluster analysis on the rasters for the predictions for suitability in the present-day and 21 Kybp. Distance between rasters is calculated as RMSD.', breaks=80)
 	
 	# if (exists('sqPred')) rm(sqPred)
 	# if (exists('lgmPred')) rm(lgmPred)
 	
 	# # get study region rasters for present and 21 Kybp, rescale so fully-available land cells are 1 and fully-covered glacial cells are NA
-	# studyRegionRasts <- brick('C:/Ecology/Drive/Research/ABC vs Biogeography/NSF_ABI_2018_2021/data_and_analyses/green_ash/study_region/!study_region_raster_masks/study_region_daltonIceMask_lakesMasked_linearIceSheetInterpolation.tif')
+	# studyRegionRasts <- brick(studyRegionRastsFileName)
 	# sqMask <- studyRegionRasts[[nlayers(studyRegionRasts)]]
 	# lgmMask <- studyRegionRasts[[1]]
 
@@ -1430,14 +1471,18 @@
 			# n <- cellStats(diffs * 0 + 1, 'sum')
 			# diffs <- diffs^2
 			# diffs <- cellStats(diffs, 'sum')
-			# sqDiffs[j, i] <- diffs / n
+			# diffs <- diffs / n
+			# diffs <- sqrt(diffs)
+			# sqDiffs[j, i] <- diffs
 			
 			# # LGM
 			# diffs <- lgmPred[[i]] - lgmPred[[j]]
 			# n <- cellStats(diffs * 0 + 1, 'sum')
 			# diffs <- diffs^2
 			# diffs <- cellStats(diffs, 'sum')
-			# lgmDiffs[j, i] <- diffs / n
+			# diffs <- diffs / n
+			# diffs <- sqrt(diffs)
+			# lgmDiffs[j, i] <- diffs
 			
 		# }
 	
@@ -1462,8 +1507,6 @@
 		# }
 	# }
 				
-	# # sqClust <- hclust(as.dist(sqDiffs))
-	# # lgmClust <- hclust(as.dist(lgmDiffs))
 	
 	# clust0ybp <- agnes(as.dist(sqDiffs), diss=TRUE, method='average')
 	# clust21000ybp <- agnes(as.dist(lgmDiffs), diss=TRUE, method='average')
@@ -1471,41 +1514,71 @@
 	# save(clust0ybp, file='./figures_and_tables/agnes_cluster_of_models_based_on_rasters_0ybp.rda')
 	# save(clust21000ybp, file='./figures_and_tables/agnes_cluster_of_models_based_on_rasters_21000ybp.rda')
 	
-	# png('./figures_and_tables/clustering_of_prediction_rasters_0ybp.png', width=1600, height=800)
-		# par(cex=1.6)
-		# plot(clust0ybp, main='Present-day differences', which.plot=2)
-	# dev.off()
+	# n <- ncol(sqDiffs)
 
-	# png('./figures_and_tables/clustering_of_prediction_rasters_21ybp.png', width=1600, height=800)
-		# par(cex=1.6)
-		# plot(clust21000ybp, main='LGM differences', which.plot=2)
+	# png('./figures_and_tables/clustering_of_prediction_rasters.png', width=2200, height=800)
+
+		# par(mfrow=c(1, 2), cex.main=2.2, cex.lab=1.6, cex.axis=1.4)
+
+		# # present-day
+		# clustMembership <- cutree(clust21000ybp, k=numModelClusts)
+		# names(clustMembership) <- colnames(as.matrix(clust21000ybp$diss))
+
+		# group <- clustMembership[match(clust0ybp$order.lab, names(clustMembership))]
+		# cols <- clustCols[group]
+
+		# plot(clust0ybp, main='Present-day differences', which.plot=2, ylab='RMSD', xlab=NA, cex=1.8)
+		# usr <- par('usr')
+		# y <- usr[3] - 0.03 * (usr[4] - usr[3])
+		# points(1:n, rep(y, n), pch=16, col=cols, xpd=NA, cex=4)
+		# y <- usr[3] - 0.07 * (usr[4] - usr[3])
+		# text(n / 2, y, labels='LGM Group', xpd=NA, cex=2.2)
+
+		# # LGM
+		# clustMembership <- cutree(clust21000ybp, k=numModelClusts)
+		# names(clustMembership) <- colnames(as.matrix(clust21000ybp$diss))
+
+		# group <- clustMembership[match(clust21000ybp$order.lab, names(clustMembership))]
+		# cols <- clustCols[group]
+
+		# plot(clust21000ybp, main='LGM differences', which.plot=2, ylab='RMSD', xlab=NA, cex=1.8)
+		# usr <- par('usr')
+		# y <- usr[3] - 0.03 * (usr[4] - usr[3])
+		# points(1:n, rep(y, n), pch=16, col=cols, xpd=NA, cex=4)
+		# y <- usr[3] - 0.07 * (usr[4] - usr[3])
+		# text(n / 2, y, labels='LGM Group', xpd=NA, cex=2.2)
+		
 	# dev.off()
 
 # say('###################################')
 # say('### project models back in time ###')
 # say('###################################')
 
-	# say('Write prediction rasters. Predictions are first written to each time period represented by the climate rasters, then interpolated to 30-yr intervals. They are then re-projected to an equal-area projection and masked by the study region rasters.', breaks=80)
+	# say('Write prediction rasters. Climate layers are interpolated linearly to 30-yr time periods. Predictions are made to these layers then re-projected to an equal-area projection and masked by the study region rasters.', breaks=80)
 	
 	# # get study region rasters for present and 21 Kybp, rescale so fully-available land cells are 1 and fully-covered glacial cells are NA
-	# studyRegionRasts <- brick('C:/Ecology/Drive/Research/ABC vs Biogeography/NSF_ABI_2018_2021/data_and_analyses/green_ash/study_region/!study_region_raster_masks/study_region_daltonIceMask_lakesMasked_linearIceSheetInterpolation.tif')
-
+	# studyRegionRasts <- brick(studyRegionRastsFileName)
 	# names(studyRegionRasts) <- paste0('year', seq(21000, 0, by=-30), 'ybp')
 	
-	# for (ext in exts) {
+	# # time periods represented by rasters
+	# climYears <- seq(21000, 0, by=-500)
+	
+	# for (gcm in gcms) {
 
-		# for (algo in algos) {
-		
-			# for (gcm in gcms) {
+		# for (ext in exts) {
+
+			# for (algo in algos) {
 			
-				# say(gcm, ' ', ext, '-km extent ', algo)
-				
+				# say(paste(gcm, ext, algo))
+			
 				# load(paste0('./models/final_model_for_', tolower(ext), 'km_extent_with_', algo, '_', gcm, '_gcm.rda'))
 		
 				# if (exists('preds')) rm(preds)
-				# for (year in rastTimes) {
-			
-					# clim <- getClimRasts(gcm=gcm, year=year, variables=predictors, rescale=TRUE, fillCoasts=FALSE)
+				# for (climYear in climYears) {
+
+					# # get climate data
+					# clim <- getClimRasts(gcm=gcm, year=climYear, variables=predictors, rescale=TRUE, fillCoasts=FALSE)
+					
 					# thisPred <- raster::predict(clim, model, fun=enmSdm::predictEnmSdm)
 					
 					# preds <- if (exists('preds')) {
@@ -1515,10 +1588,15 @@
 					# }
 		
 				# } # next year
-				
-				# # re-project and interpolate
-				# preds <- interpolateRasters(preds, interpFrom=rastTimes, interpTo=seq(21000, 0, by=-30))
+
+				# interpFrom <- -1 * climYears
+				# interpTo <- seq(-21000, 0, by=30)
+				# preds <- interpolateRasters(preds, interpFrom=interpFrom, interpTo=interpTo, type='linear')
+
+				# # project
 				# preds <- projectRaster(preds, studyRegionRasts)
+				# preds <- calc(preds, fun=function(x) ifelse(x < 0, 0, x))
+				# preds <- calc(preds, fun=function(x) ifelse(x > 1, 1, x))
 				
 				# # mask by study region and force values to be within [0, 1] (can get pushed outside this during re-projection)
 				# for (i in 1:nlayers(preds)) {
@@ -1526,37 +1604,363 @@
 					# landMask <- (1 - studyRegionRasts[[i]])
 					# preds[[i]] <- preds[[i]] * landMask
 					
-					# preds[[i]] <- calc(preds[[i]], fun=function(x) ifelse(x < 0, 0, x))
-					# preds[[i]] <- calc(preds[[i]], fun=function(x) ifelse(x > 1, 1, x))
-					
 				# }
 				
-				# names(preds) <- paste0('year', seq(21000, 0, by=-30), 'ybp')
+				# names(preds) <- paste0('ybp', seq(21000, 0, by=-30))
 				# writeRaster(preds, paste0('./predictions/', gcm, '_', ext, 'kmExtent_', algo))
-				
-			# } # next GCM
+					
+			# } # next algorithm
 			
-		# } # next algorithm
+		# } # next extent
 		
 	# } # next GCM
 
+# say('#################################')
+# say('### calculate biotic velocity ###')
+# say('#################################')
+
+	# say('Cycle through: time intervals (30, ..., 21000 yr); whether or not to consider velocity in only shared cells or all cells; and whether or not to examine velocity in only cells that never had ice and were always land across all time periods.', breaks=80, post=2)
+
+	# # times represented by suitability rasters
+	# times <- seq(-21000, 0, by=30)
+
+	# # raster with same resolution/extent as that used for demographic/genetic simulations
+	# demoGeneticTemplate <- raster(demoGeneticRasterTemplate)
+	
+	# # time intervals at which to calculate velocities
+	# # intervals <- c(30, 60, 120, 240, 480, 990, 21000)
+	# intervals <- c(30, 990, 21000)
+
+	# # to store it all
+	# velocities <- data.frame()
+	
+	# # allowing land and glaciers to shift
+	# for (interval in intervals) {
+	
+		# atTimes <- seq(-21000, 0, by=interval)
+			
+		# for (ext in exts) {
+			# for (gcm in gcms) {
+				# for (algo in algos) {
+
+					# # get predictions
+					# preds <- brick(paste0('./predictions/', gcm, '_', ext, 'kmExtent_', algo, '.tif'))
+					
+					# # resample to same resolution as demographic/genetic simulations then ensure values are in [0, 1]
+					# preds <- resample(preds, demoGeneticTemplate)
+					# preds <- calc(preds, fun=function(x) ifelse(x < 0, 0, x))
+					# preds <- calc(preds, fun=function(x) ifelse(x > 1, 1, x))
+					
+					# for (onlyInSharedCells in c(TRUE, FALSE)) {
+			
+						# say('ext ', ext, ' | gcm ', gcm, ' | algo ', algo, ' | interval ', interval, ' | shared cells ', onlyInSharedCells, ' | dynamic land | ', date())
+
+						# # biotic velocity
+						# thisVelocity <- bioticVelocity(preds, times=times, atTimes=atTimes, onlyInSharedCells=onlyInSharedCells, cores=4)
+
+						# gc()
+
+						# # remember
+						# velocities <- rbind(
+							# velocities,
+							# cbind(
+								# data.frame(
+									# ext = tolower(ext),
+									# gcm = gcm,
+									# algo = algo,
+									# onlyInSharedCells = onlyInSharedCells,
+									# onlyInContinuouslyExposedLand = FALSE
+								# ),
+								# thisVelocity
+							# )
+						# )
+								
+					# } # next in shared cells
+		
+				# } # next algo
+			# } # next GCM
+		# } # next extent
+			
+	# } # next interval
+
+	# studyRegion <- brick(studyRegionRastsFileName)
+	
+	# studyRegionExposedLandMask <- sum(studyRegion)
+	# studyRegionExposedLandMask <- calc(studyRegionExposedLandMask, fun=function(x) ifelse(x %==na% 0, 1, NA))
+	
+	# # using only cells that were never covered by glaciers and always land
+	# for (interval in intervals) {
+	
+		# atTimes <- seq(-21000, 0, by=interval)
+			
+		# for (ext in exts) {
+			# for (gcm in gcms) {
+				# for (algo in algos) {
+
+					# say('ext ', ext, ' | gcm ', gcm, ' | algo ', algo, ' | interval ', interval, ' | shared cells ', onlyInSharedCells, ' | static land | ', date())
+
+					# # get predictions
+					# preds <- brick(paste0('./predictions/', gcm, '_', ext, 'kmExtent_', algo, '.tif'))
+					# preds <- studyRegionExposedLandMask * preds
+
+					# preds <- resample(preds, demoGeneticTemplate)
+				
+					# preds <- calc(preds, fun=function(x) ifelse(x < 0, 0, x))
+					# preds <- calc(preds, fun=function(x) ifelse(x > 1, 1, x))
+
+					# # biotic velocity
+					# thisVelocity <- bioticVelocity(preds, times=times, atTimes=atTimes, onlyInSharedCells=onlyInSharedCells, cores=4)
+					
+					# gc()
+
+					# # remember
+					# velocities <- rbind(
+						# velocities,
+						# cbind(
+							# data.frame(
+								# ext = tolower(ext),
+								# gcm = gcm,
+								# algo = algo,
+								# onlyInSharedCells = TRUE,
+								# onlyInContinuouslyExposedLand = TRUE
+							# ),
+							# thisVelocity
+						# )
+					# )
+							
+				# } # next algorithm
+			# } # next GCM
+		# } # next extent
+	# } # next interval
+
+	# save(velocities, file='./figures_and_tables/biotic_velocities.rda')
+	
+# say('################################################')
+# say('### plot biotic velocity for periods < 21 Ka ###')
+# say('################################################')
+
+	# # clustering
+	# load('./figures_and_tables/agnes_cluster_of_models_based_on_rasters_21000ybp.rda')
+	# clustMembership <- cutree(clust21000ybp, k=numModelClusts)
+	# names(clustMembership) <- colnames(as.matrix(clust21000ybp$diss))
+
+	# load('./figures_and_tables/biotic_velocities.rda')
+	
+	# # metrics <- c('centroidVelocity', 'nsCentroidVelocity', 'ewCentroidVelocity', 'nsQuantVelocity_quant0p05', 'nsQuantVelocity_quant0p95')
+	# metrics <- c('centroidVelocity', 'nsCentroidVelocity', 'nsQuantVelocity_quant0p05', 'nsQuantVelocity_quant0p95')
+	
+	# for (metric in metrics) {
+			
+		# metricNice <- if (metric == 'centroidVelocity') {
+			# 'Centroid Velocity'
+		# } else if (metric == 'nsQuantVelocity_quant0p95') {
+			# 'Northern Range Edge Velocity (95th quantile)'
+		# } else if (metric == 'nsQuantVelocity_quant0p05') {
+			# 'Southern Range Edge Velocity (5th quantile)'
+		# } else if (metric == 'nsCentroidVelocity') {
+			# 'North- vs Southward Centroid Movement'
+		# } else if (metric == 'ewCentroidVelocity') {
+			# 'East- vs Westward Centroid Movement'
+		# }
+
+		# png(paste0('./figures_and_tables/bioticVelocity_', metric, '.png'), width=1.5 * 1280, height=1.5 * 720)
+			
+			# par(mfrow=c(2, 3), oma=c(1, 1, 3, 1), cex.main=2.2, cex.lab=2, cex.axis=1.8)
+
+			# for (interval in c(30, 990)) {
+				
+				# # get maximum velocity across models
+				# minVel <- min(velocities[velocities$timeSpan == interval, metric])
+				# maxVel <- max(velocities[velocities$timeSpan == interval, metric])
+
+				# ### for cases where cells are not necessarily continuously-exposed and available
+				# for (onlyInSharedCells in c(FALSE, TRUE)) {
+
+					# # plot
+					# main <- paste0(
+						# # metricNice,
+						# if (onlyInSharedCells) { 'Only Shared non-NA Cells' } else { 'All Cells' },
+						# ' | ', interval, '-yr Intervals'
+					# )
+
+					# plot(0, 0, col='white', xlim=c(-21000, 0), ylim=c(minVel, maxVel), xlab='YBP', ylab='Velocity (m / y)', main=main)
+					
+					# for (i in seq(-21000, 0, by=500)) {
+						# lines(c(i, i), c(minVel, maxVel), lwd=0.2, col='gray')
+					# }
+				
+					# for (gcm in gcms) {
+						# for (ext in exts) {
+							# for (algo in algos) {
+								
+								# thisVel <- velocities[velocities$timeSpan == interval & velocities$gcm == gcm & velocities$ext == ext & velocities$algo == algo & velocities$onlyInSharedCells == onlyInSharedCells & !velocities$onlyInContinuouslyExposedLand, ]
+								# modelGroup <- paste0(gcm, '_', ext, 'kmExtent_', algo)
+								# group <- clustMembership[[modelGroup]]
+								
+								# col <- clustCols[group]
+								
+								# years <- rowMeans(thisVel[ , c('timeFrom', 'timeTo')])
+								# lines(years, thisVel[ , metric], col=col, lwd=2)
+								
+							# }
+						# }
+					# }
+					
+					# # legend('topleft', inset=-0.01, legend=paste0('Group', 1:numModelClusts), col=clustCols[1:numModelClusts], lwd=1, cex=0.5, box.col='white')
+					
+				# } # next only in shared cells
+
+				# # plot
+				# main <- paste0('Continuously Terrestrial, Ice-free Cells', ' | ', interval, '-yr Intervals')
+
+				# plot(0, 0, col='white', xlim=c(-21000, 0), ylim=c(minVel, maxVel), xlab='YBP', ylab='Velocity (m / y)', main=main)
+				
+				# for (i in seq(-21000, 0, by=500)) {
+					# lines(c(i, i), c(minVel, maxVel), lwd=0.2, col='gray')
+				# }
+			
+				# for (gcm in gcms) {
+					# for (ext in exts) {
+						# for (algo in algos) {
+							
+							# thisVel <- velocities[velocities$timeSpan == interval & velocities$gcm == gcm & velocities$ext == ext & velocities$algo == algo & velocities$onlyInSharedCells == onlyInSharedCells & velocities$onlyInContinuouslyExposedLand, ]
+							# modelGroup <- paste0(gcm, '_', ext, 'kmExtent_', algo)
+							# group <- clustMembership[[modelGroup]]
+							
+							# col <- clustCols[group]
+							
+							# years <- rowMeans(thisVel[ , c('timeFrom', 'timeTo')])
+							# lines(years, thisVel[ , metric], col=col, lwd=2)
+							
+						# }
+					# }
+				# }
+				
+					# # legend('topleft', inset=-0.01, legend=paste0('Group', 1:numModelClusts), col=clustCols[1:numModelClusts], lwd=1, cex=0.5, box.col='white')
+					
+			# } # next interval
+		
+			# title(sub=date(), outer=TRUE, line=-1)
+			# title(main=metricNice, outer=TRUE, line=0.8, cex.main=2.9)
+		
+		# dev.off()
+			
+	# } # next metric
+			
+# say('#################################################')
+# say('### plot biotic velocity for periods of 21 Ka ###')
+# say('#################################################')
+
+	# # clustering
+	# load('./figures_and_tables/agnes_cluster_of_models_based_on_rasters_21000ybp.rda')
+	# clustMembership <- cutree(clust21000ybp, k=numModelClusts)
+	# names(clustMembership) <- colnames(as.matrix(clust21000ybp$diss))
+
+	# load('./figures_and_tables/biotic_velocities.rda')
+	
+	# # metrics <- c('centroidVelocity', 'nsCentroidVelocity', 'ewCentroidVelocity', 'nsQuantVelocity_quant0p05', 'nsQuantVelocity_quant0p95')
+	# metrics <- c('centroidVelocity', 'nsCentroidVelocity', 'nsQuantVelocity_quant0p05', 'nsQuantVelocity_quant0p95')
+	
+	# interval <- 21000
+	
+	# for (metric in metrics) {
+			
+		# if (metric == 'centroidVelocity') {
+			# metricNice <- 'Centroid Velocity'
+			# zeroLine <- FALSE
+		# } else if (metric == 'nsQuantVelocity_quant0p95') {
+			# metricNice <- 'Northern Range Edge Velocity (95th quantile)'
+			# zeroLine <- TRUE
+		# } else if (metric == 'nsQuantVelocity_quant0p05') {
+			# metricNice <- 'Southern Range Edge Velocity (5th quantile)'
+			# zeroLine <- TRUE
+		# } else if (metric == 'nsCentroidVelocity') {
+			# metricNice <- 'North- vs Southward Centroid Movement'
+			# zeroLine <- TRUE
+		# } else if (metric == 'ewCentroidVelocity') {
+			# metricNice <- 'East- vs Westward Centroid Movement'
+			# zeroLine <- TRUE
+		# }
+
+		# png(paste0('./figures_and_tables/bioticVelocity_21Ka_', metric, '.png'), width=1900, height=800, res=300)
+		
+			# par(mfrow=c(1, 3), oma=c(6.5, 0, 1.6, 1), mar=c(0, 4, 1.2, 0), mgp=c(1.2, 0.23, 0), cex.main=0.8, cex.lab=0.7, cex.axis=0.6, tck=-0.02, lwd=0.8)
+
+			# # get extreme velocities across models
+			# minVel <- min(velocities[velocities$timeSpan == interval, metric])
+			# maxVel <- max(velocities[velocities$timeSpan == interval, metric])
+			
+			# ylim <- c(min(0, minVel), maxVel)
+
+			# ### for cases where cells are not necessarily continuously-exposed and available
+			# for (onlyInSharedCells in c(FALSE, TRUE)) {
+
+				# # plot
+				# main <- ifelse(onlyInSharedCells, 'Only Shared non-NA Cells', 'All Cells')
+
+				# thisVel <- velocities[velocities$timeSpan == interval & velocities$onlyInSharedCells == onlyInSharedCells & !velocities$onlyInContinuouslyExposedLand, ]
+
+				# # color and sort by group
+				# thisVel$group <- clustMembership[match(paste0(thisVel$gcm, '_', thisVel$ext, 'kmExtent_', thisVel$algo), names(clustMembership))]
+				# thisVel <- thisVel[order(thisVel$group), ]
+				# thisVel$col <- clustCols[thisVel$group]
+
+				# # plot
+				# n <- nrow(thisVel)
+				# labels <- paste0(thisVel$gcm, ' ', thisVel$ext, '-km extent ', thisVel$algo)
+				# ylab <- 'Biotic velocity (m / y)'
+				# plot(1:n, thisVel[ , metric], pch=21, cex=1, bg=thisVel$col, xaxt='n', ylab=ylab, xlab='', main=main, ylim=ylim, bty='n', xpd=NA)
+				# if (zeroLine) lines(c(1, n), c(0, 0), col=1, lwd=0.6)
+				# points(1:n, thisVel[ , metric], pch=21, cex=1, bg=thisVel$col)
+				# text(1:n, thisVel[ , metric], labels=labels, adj=c(1.1, 0.2), xpd=NA, srt=90, col=thisVel$col, cex=0.6)
+				
+			# }
+			
+			# # plot
+			# main <- 'Continuously-exposed, non-ice cells'
+
+			# thisVel <- velocities[velocities$timeSpan == interval & velocities$onlyInSharedCells & velocities$onlyInContinuouslyExposedLand, ]
+
+			# # color and sort by group
+			# thisVel$group <- clustMembership[match(paste0(thisVel$gcm, '_', thisVel$ext, 'kmExtent_', thisVel$algo), names(clustMembership))]
+			# thisVel <- thisVel[order(thisVel$group), ]
+			# thisVel$col <- clustCols[thisVel$group]
+
+			# # plot
+			# n <- nrow(thisVel)
+			# labels <- paste0(thisVel$gcm, ' ', thisVel$ext, '-km extent ', thisVel$algo)
+			# ylab <- 'Biotic velocity (m / y)'
+			# plot(1:n, thisVel[ , metric], pch=21, cex=1, bg=thisVel$col, xaxt='n', ylab=ylab, xlab='', main=main, ylim=ylim, bty='n', xpd=NA)
+			# if (zeroLine) lines(c(1, n), c(0, 0), col=1, lwd=0.6)
+			# points(1:n, thisVel[ , metric], pch=21, cex=1, bg=thisVel$col)
+			# text(1:n, thisVel[ , metric], labels=labels, adj=c(1.1, 0.2), xpd=NA, srt=90, col=thisVel$col, cex=0.6)
+
+			# title(main=paste('Biotic velocity for', metricNice, 'across a 21-Ka interval'), outer=TRUE)
+			# title(sub=date(), outer=TRUE, cex.sub=0.3, line=5.5)
+
+		# dev.off()
+			
+	# } # next metric
+			
 # say('################################')
 # say('### make maps of predictions ###')
 # say('################################')
 
 	# # study region
-	# studyRegionRasts <- brick('C:/Ecology/Drive/Research/ABC vs Biogeography/NSF_ABI_2018_2021/data_and_analyses/green_ash/study_region/!study_region_raster_masks/study_region_daltonIceMask_lakesMasked_linearIceSheetInterpolation.tif')
+	# studyRegionRasts <- brick(studyRegionRastsFileName)
 
 	# # map extent
 	# plotExtent <- extent(namSpAlbStudyRegion)
 	# plotExtent <- as(plotExtent, 'SpatialPolygons')
 	# projection(plotExtent) <- projection(namSpAlbStudyRegion)
 	
+	# load('./figures_and_tables/biotic_velocities.rda')
+	
 	# ### load prediction stacks
 	# preds <- list()
-	# for (gcm in gcms) {
-		# for (ext in exts) {
-			# for (algo in algos) {
+	# for (algo in algos) {
+		# for (gcm in gcms) {
+			# for (ext in exts) {
 				# thesePreds <- brick(paste0('./predictions/', gcm, '_', ext, 'kmExtent_', algo, '.tif'))
 				# names(thesePreds) <- paste0('year', seq(21000, 0, by=-30), 'ybp')
 				# preds[[length(preds) + 1]] <- thesePreds
@@ -1568,71 +1972,114 @@
 	# # clustering
 	# load('./figures_and_tables/agnes_cluster_of_models_based_on_rasters_21000ybp.rda')
 	# clustMembership <- cutree(clust21000ybp, k=numModelClusts)
-	# names(clustMembership) <- clust21000ybp$order.lab
+	# names(clustMembership) <- colnames(as.matrix(clust21000ybp$diss))
 
 	# # suitability raster colors
-	# cols <- c('#fff7bc', '#99d8c9', '#66c2a4', '#238b45', '#00441b')
+	
+	# # cols <- c('gray83', '#f7fcfd','#e5f5f9','#ccece6','#99d8c9','#66c2a4','#41ae76','#238b45','#006d2c','#00441b')
+	# cols <- c('gray83', '#ccece6', '#99d8c9', '#66c2a4', '#41ae76', '#238b45', '#006d2c', '#00441b')
+	# breaks <- seq(0, 1, length.out=length(cols) + 1)
+	
+	# # colors for centroids and quantile markers
+	# colAllCells <- 'black'
+	# colConstantCells <- 'red'
+	
+	# currentLty <- 'dotted'
+	# centroidPathLwd <- 2
 	
 	# ### plot
 	# dirCreate('./figures_and_tables/series')
 	
 	# conts <- list() # contours of LGM rasters
+	# interval <- 30
 	# years <- seq(21000, 0, by=-30)
 	# for (countYear in seq_along(years)) {
 		
 		# year <- years[countYear]
-		# say(year)
-		
 		# if (year %% 210 == 0) {
-
-			# png(paste0('./figures_and_tables/series/predicted_suitable_area_all_models_', prefix(21000 - year, 5), 'yr_after_21000ybp.png'), width=2400, height=1600)
-			# par(mfrow=c(4, 7), oma=c(2, 2, 4, 2), mar=c(0, 0, 6, 0))
+			
+			# say(year)
+			
+			# png(paste0('./figures_and_tables/series/predicted_suitable_area_all_models_', prefix(21000 - year, 5), 'yr_after_21000ybp_', prefix(year, 5), 'ybp.png'), width=2400, height=1600)
+				
+				# par(mfrow=c(4, 7), oma=c(2, 2, 4, 2), mar=c(0, 0, 6, 0))
 			
 				# count <- 1
-				# plot(0, 0, fg='white', xaxt='n', yaxt='n', main='', xlim=c(0, 1), ylim=c(0, 1), ann=FALSE)
-			
+				# plot(0, 0, col='white', fg='white', xaxt='n', yaxt='n', main='', xlim=c(0, 1), ylim=c(0, 1), ann=FALSE)
+
+				# # land
+				# year500 <- 500 * ceiling(year / 500)
+				# land <- getClimRasts('ccsm', year=year500, variables=predictors[1], rescale=FALSE)
+				# land <- land * 0
+				# land <- projectRaster(land, crs=projection(plotExtent))
+				# land <- crop(land, plotExtent)
+
 				# for (algo in algos) {
 					# for (gcm in gcms) {
 						# for (ext in exts) {
 
 							# # empty plots for time slider
 							# if (count %% 7 == 0) {
-								# plot(0, 0, fg='white', xaxt='n', yaxt='n', main='', xlim=c(0, 1), ylim=c(0, 1), ann=FALSE)
+								# plot(NA, fg='white', bg=NA, xaxt='n', yaxt='n', main='', xlim=c(0, 1), ylim=c(0, 1), ann=FALSE)
 								# count <- count + 1
 							# }
 							
 							# # time slider
 							# if (count == 22) {
+							
 								# mult <- 1.15 # relative height
+								# x <- 0.7
 								# y <- (1 - (year / 21000)) * 3.95 * mult * 1
-								# lines(c(0.5, 0.5), c(0, 3.95 * mult * 1), lwd=50, col='gray70', xpd=NA)
-								# lines(c(0.5, 0.5), c(0, y), lwd=50, col='gray20', xpd=NA)
-								# text(0.5, 0.17 + y, labels=paste(year, 'ybp'), cex=7, xpd=NA)
+								# lines(c(x, x), c(0, 3.95 * mult * 1), lwd=50, col='gray70', xpd=NA)
+								# lines(c(x, x), c(0, y), lwd=50, col='gray20', xpd=NA)
+								# text(x, 0.17 + y, labels=paste(year, 'ybp'), cex=5, xpd=NA)
+							
+								# # legend
+								# y <- 0
+								# x <- -0.02
+								# points(x, y + 0, pch=1, col=colAllCells, cex=6, xpd=NA)
+								# lines(c(x, x), y + c(0, 0.20), col=colAllCells, xpd=NA, lwd=centroidPathLwd)
+								# text(x, y + 0.25, labels='Starting centroid and centroid path of all cells', srt=90, cex=4, adj=c(0, 0.5), xpd=NA, col=colAllCells)
+							
+								# x <- 0.1
+								# points(x, y + 0, pch=1, col=colConstantCells, cex=6, xpd=NA)
+								# lines(c(x, x), y + c(0, 0.20), col=colConstantCells, xpd=NA, lwd=centroidPathLwd)
+								# text(x, y + 0.25, labels='Starting centroid and centroid path of constantly-exposed, never-ice cells', srt=90, cex=4, adj=c(0, 0.5), xpd=NA, col=colConstantCells)
+							
+								# x <- 0.22
+								# lines(c(x, x), y + c(0, 0.06), col=colAllCells, xpd=NA, lwd=3)
+								# lines(c(x, x), y + c(0.14, 0.20), col=colAllCells, xpd=NA, lwd=3, lty=currentLty)
+								# text(x, y + 0.25, labels='Starting/current latitude of extreme 5th quantiles using all cells', srt=90, cex=4, adj=c(0, 0.5), xpd=NA, col=colAllCells)
+							
+								# x <- 0.34
+								# lines(c(x, x), y + c(0, 0.06), col=colConstantCells, xpd=NA, lwd=3)
+								# lines(c(x, x), y + c(0.14, 0.20), col=colConstantCells, xpd=NA, lwd=3, lty=currentLty)
+								# text(x, y + 0.25, labels='Starting/current latitude of extreme 5th quantiles using constantly-exposed, never-ice cells', srt=90, cex=4, adj=c(0, 0.5), xpd=NA, col=colConstantCells)
+							
 							# }
 							
+							# # plot extent
 							# thisOne <- paste0(gcm, '_', ext, 'kmExtent_', algo)
 							# boxCol <- clustCols[clustMembership[[thisOne]]]
-							# plot(plotExtent, border=NA, col='gray90', ann=FALSE, main='')
+							# plot(plotExtent, border=NA, bg=NA, fg=NA, col=NA, ann=FALSE, main='')
 
-							# year500 <- 500 * ceiling(year / 500)
-							# land <- getClimRasts('ccsm', year=year500, variables=predictors[1], rescale=FALSE)
-							# land <- land * 0
-							# land <- projectRaster(land, crs=projection(plotExtent))
-							# land <- crop(land, plotExtent)
-							# plot(land, col='gray80', legend=FALSE, add=TRUE)
-							# plot(namSpAlbStudyRegion, lwd=0.2, add=TRUE)
+							# # land
+							# plot(land, col='gray90', legend=FALSE, add=TRUE)
 							
-							# plot(plotExtent, border=boxCol, lwd=10, add=TRUE)
+							# # scenario class indicator (border)
+							# plot(plotExtent, border=boxCol, lwd=10, add=TRUE, fg=NA, bg=NA)
+							
+							# # predictions
 							# x <- preds[[thisOne]][[countYear]]
-							# plot(x, legend=FALSE, add=TRUE, col=cols, breaks=seq(0, 1, by=0.2))
+							# plot(x, legend=FALSE, add=TRUE, col=cols, breaks=breaks)
 							
 							# ice <- studyRegionRasts[[countYear]]
 							# ice <- calc(ice, fun=function(x) ifelse(x == 1, 1, NA))
-							# # plot(ice, col='darkslategray3', legend=FALSE, add=TRUE)
 							# plot(ice, col='steelblue1', legend=FALSE, add=TRUE)
 							
-							# # plot(namSpAlbStudyRegion, add=TRUE, lwd=0.2, border='gray20')
+							# plot(namSpAlbStudyRegion, add=TRUE, lwd=0.2, border='gray20')
 							
+							# # contours for LGM densities
 							# if (year == 21000) {
 								# quant <- quantile(x, 0.95)
 								# conts[[length(conts) + 1]] <- rasterToContour(x, level=quant)
@@ -1641,11 +2088,80 @@
 							
 							# plot(conts[[thisOne]], add=TRUE)
 							
+							# #### quantile/centroid indicators
+
+								# ### centroids
+
+								# # starting centroids
+								# startCentroid_anyCells <- velocities[velocities$timeFrom == -21000 & velocities$timeSpan == interval & velocities$algo == algo & velocities$gcm == gcm & velocities$ext == ext & !velocities$onlyInSharedCells & !velocities$onlyInContinuouslyExposedLand, c('centroidLong', 'centroidLat')]
+								# startCentroid_constantCells <- velocities[velocities$timeFrom == -21000 & velocities$timeTo == -21000 + interval & velocities$algo == algo & velocities$gcm == gcm & velocities$ext == ext & velocities$onlyInSharedCells & velocities$onlyInContinuouslyExposedLand, c('centroidLong', 'centroidLat')]
+
+								# cex <- 3
+								# points(startCentroid_constantCells, pch=1, cex=cex, col=colConstantCells)
+								# points(startCentroid_anyCells, pch=1, cex=cex, col=colAllCells)
+								
+								# ### centroid paths
+
+								# startCentroid_constantCells_path <- velocities[velocities$timeFrom <= -1 * year & velocities$timeSpan == interval & velocities$algo == algo & velocities$gcm == gcm & velocities$ext == ext & velocities$onlyInContinuouslyExposedLand, c('centroidLong', 'centroidLat')]
+								# startCentroid_allCells_path <- velocities[velocities$timeFrom <= -1 * year & velocities$timeSpan == interval & velocities$algo == algo & velocities$gcm == gcm & velocities$ext == ext & !velocities$onlyInSharedCells & !velocities$onlyInContinuouslyExposedLand, c('centroidLong', 'centroidLat')]
+
+								# lines(startCentroid_constantCells_path$centroidLong, startCentroid_constantCells_path$centroidLat, col=colConstantCells, lwd=2)
+								# lines(startCentroid_allCells_path$centroidLong, startCentroid_constantCells_path$centroidLat, col=colAllCells, lwd=2)
+								
+								# ### northern/southern latitude markers
+								
+								# # quantile locations
+								# right <- xmax(plotExtent)
+								# left <- xmin(plotExtent) + 0.02 * (xmax(plotExtent) - xmin(plotExtent))
+								# width <- right - left
+								# extension <- 0.06
+								
+								# # starting latitude of 5th quantile
+								# latConstant <- velocities[velocities$timeFrom == -21000 & velocities$timeSpan == interval & velocities$algo == algo & velocities$gcm == gcm & velocities$ext == ext & velocities$onlyInSharedCells & velocities$onlyInContinuouslyExposedLand, c('nsQuantLat_quant0p05')]
+
+								# latAll <- velocities[velocities$timeFrom == -21000 & velocities$timeSpan == interval & velocities$algo == algo & velocities$gcm == gcm & velocities$ext == ext & !velocities$onlyInSharedCells & !velocities$onlyInContinuouslyExposedLand, c('nsQuantLat_quant0p05')]
+								
+								# lines(c(left, left + width * extension), c(latAll, latAll), col=colConstantCells, lwd=cex)
+								# lines(c(left, left + width * extension), c(latAll, latAll), col=colAllCells, lwd=cex)
+
+								# # current latitude of 5th quantile
+								# if (year < 21000) {
+									
+									# latConstant <- velocities[velocities$timeFrom == -1 * year - interval & velocities$timeTo == -1 * year & velocities$algo == algo & velocities$gcm == gcm & velocities$ext == ext & velocities$onlyInSharedCells & velocities$onlyInContinuouslyExposedLand, c('nsQuantLat_quant0p05')]
+								
+									# latAll <- velocities[velocities$timeFrom == -1 * year - interval & velocities$timeTo == -1 * year & velocities$algo == algo & velocities$gcm == gcm & velocities$ext == ext & !velocities$onlyInSharedCells & !velocities$onlyInContinuouslyExposedLand, c('nsQuantLat_quant0p05')]
+									
+									# lines(c(left, left + width * extension), c(latConstant, latConstant), col=colConstantCells, lwd=cex, lty=currentLty)
+									# lines(c(left, left + width * extension), c(latAll, latAll), col=colAllCells, lwd=cex, lty=currentLty)
+
+								# }
+
+								# # starting latitude of 95th quantile
+								# latConstant <- velocities[velocities$timeFrom == -21000 & velocities$timeSpan == interval & velocities$algo == algo & velocities$gcm == gcm & velocities$ext == ext & velocities$onlyInSharedCells & velocities$onlyInContinuouslyExposedLand, c('nsQuantLat_quant0p95')]
+
+								# latAll <- velocities[velocities$timeFrom == -21000 & velocities$timeSpan == interval & velocities$algo == algo & velocities$gcm == gcm & velocities$ext == ext & !velocities$onlyInSharedCells & !velocities$onlyInContinuouslyExposedLand, c('nsQuantLat_quant0p95')]
+								
+								# lines(c(left, left + width * extension), c(latConstant, latConstant), col=colConstantCells, lwd=cex)
+								
+								# lines(c(left, left + width * extension), c(latAll, latAll), col=colAllCells, lwd=cex)
+
+								# # current latitude of 95th quantile
+								# if (year < 21000) {
+								
+									# latConstant <- velocities[velocities$timeFrom == -1 * year - interval & velocities$timeTo == -1 * year & velocities$algo == algo & velocities$gcm == gcm & velocities$ext == ext & velocities$onlyInSharedCells & velocities$onlyInContinuouslyExposedLand, c('nsQuantLat_quant0p95')]
+								
+									# latAll <- velocities[velocities$timeFrom == -1 * year - interval & velocities$timeTo == -1 * year & velocities$algo == algo & velocities$gcm == gcm & velocities$ext == ext & !velocities$onlyInSharedCells & !velocities$onlyInContinuouslyExposedLand, c('nsQuantLat_quant0p95')]
+								
+									# lines(c(left, left + width * extension), c(latConstant, latConstant), col=colConstantCells, lwd=cex, lty=currentLty)
+									# lines(c(left, left + width * extension), c(latAll, latAll), col=colAllCells, lwd=cex, lty=currentLty)
+
+								# }
+								
 							# main <- paste(toupper(gcm), '\n', ext, '-km extent ', toupper(algo), collapse='', sep='')
 							# title(main, line=0, cex.main=3.3, xpd=NA)
 							
 							# count <- count + 1
-						
+
 						# }
 					# }
 				# }
@@ -1655,169 +2171,9 @@
 
 			# dev.off()
 			
-		# }
-				
-	# }
+		# } # if plotting this year
+
+	# } # next year
 		
-# say('#################################')
-# say('### calculate biotic velocity ###')
-# say('#################################')
-
-	# say('Cycle through time intervals and whether or not to consider velocity in only shared cells or all cells.')
-
-	# # NB times are 0 at LGM, 21000 at present
-	# times <- seq(-21000, 0, by=30)
-	
-	# for (interval in c(30, 990)) {
-	
-		# for (onlyInSharedCells in c(TRUE, FALSE)) {
-			
-			# atTimes <- seq(-21000, 0, by=interval)
-			# velocities <- data.frame()
-				
-			# say('')
-			
-			# for (ext in exts) {
-				# for (gcm in gcms) {
-					# for (algo in algos) {
-					
-						# say(paste(ext, gcm, algo, interval, onlyInSharedCells))
-
-						# # get predictions
-						# preds <- brick(paste0('./predictions/', gcm, '_', ext, 'kmExtent_', algo, '.tif'))
-						
-						# # biotic velocity
-						# thisVelocity <- bioticVelocity(preds, times=times, atTimes=atTimes, onlyInSharedCells=onlyInSharedCells)
-						
-						# # remember
-						# velocities <- rbind(
-							# velocities,
-							# cbind(
-								# data.frame(
-									# ext = tolower(ext),
-									# gcm = gcm,
-									# algo = algo,
-									# onlyInSharedCells = onlyInSharedCells
-								# ),
-								# thisVelocity
-							# )
-						# )
-
-					# }
-				# }
-			# }
-			
-			# cells <- if (onlyInSharedCells) { 'allCells'} else { 'sharedCells' }
-			# write.csv(velocities, paste0('./figures_and_tables/biotic_velocities_', interval, 'YrIntervals_', cells, '.csv'), row.names=FALSE)
-			
-		# } # next in shared cells
-		
-	# } # next interval
-	
-say('############################')
-say('### plot biotic velocity ###')
-say('############################')
-
-	# clustering
-	load('./figures_and_tables/agnes_cluster_of_models_based_on_rasters_21000ybp.rda')
-	clustMembership <- cutree(clust21000ybp, k=numModelClusts)
-	names(clustMembership) <- clust21000ybp$order.lab
-
-	# load velocities
-	for (interval in c(30, 990)) {
-		for (onlyInSharedCells in c(TRUE, FALSE)) {
-
-			cells <- if (onlyInSharedCells) { 'allCells'} else { 'sharedCells' }
-			x <- read.csv(paste0('./figures_and_tables/biotic_velocities_', interval, 'YrIntervals_', cells, '.csv'))
-			cells <- capIt(cells)
-			assign(paste0('bv', interval, 'Yr', cells), x)
-			
-		}
-	}
-
-	metrics <- c('centroidVelocity', 'nsQuantVelocity_quant0p05', 'nsQuantVelocity_quant0p95')
-	
-	for (metric in metrics) {
-			
-		metricNice <- if (metric == 'centroidVelocity') {
-			'Centroid Velocity'
-		} else if (metric == 'nsQuantVelocity_quant0p95') {
-			'Velocity of Northern Range Edge (95th quantile)'
-		} else if (metric == 'nsQuantVelocity_quant0p05') {
-			'Velocity of Southern Range Edge (5th quantile)'
-		}
-	
-		png(paste0('./figures_and_tables/bioticVelocity_', metric, '.png'), width=1.5 * 1280, height=1.5 * 720)
-			
-			par(mfrow=c(2, 2), oma=c(1, 1, 3, 1), cex.main=2.2, cex.lab=2, cex.axis=1.8)
-
-			for (interval in c(30, 990)) {
-				
-				# get maximum velocity across models
-				minVel <- Inf
-				maxVel <- -Inf
-				for (onlyInSharedCells in c(TRUE, FALSE)) {
-			
-					cells <- if (onlyInSharedCells) { 'allCells'} else { 'sharedCells' }
-					cells <- capIt(cells)
-					x <- get(paste0('bv', interval, 'Yr', cells))
-					minVel <- min(c(minVel, x[ , metric]))
-					maxVel <- max(c(maxVel, x[ , metric]))
-					
-					assign(paste0('bv', interval, 'Yr', cells), x)
-					
-				}
-				
-				minVel <- min(0, minVel)
-
-				for (onlyInSharedCells in c(FALSE, TRUE)) {
-				
-					cells <- if (onlyInSharedCells) { 'allCells'} else { 'sharedCells' }
-					cells <- capIt(cells)
-					x <- get(paste0('bv', interval, 'Yr', cells))
-
-					# plot
-					main <- paste0(
-						metricNice,
-						if (onlyInSharedCells) { ' | Shared Cells' } else { ' | All Cells' },
-						' | ', interval, '-yr Time Steps'
-					)
-
-					plot(0, 0, col='white', xlim=c(-21000, 0), ylim=c(minVel, maxVel), xlab='YBP', ylab='Velocity (m / y)', main=main)
-					
-					for (i in seq(-21000, 0, by=500)) {
-						lines(c(i, i), c(minVel, maxVel), lwd=0.2, col='gray')
-					}
-				
-					for (gcm in gcms) {
-						for (ext in exts) {
-							for (algo in algos) {
-								
-								thisVel <- x[x$gcm == gcm & x$ext == ext & x$algo == algo & x$onlyInSharedCells == onlyInSharedCells, ]
-								modelGroup <- paste0(gcm, '_', ext, 'kmExtent_', algo)
-								group <- clustMembership[[modelGroup]]
-								
-								col <- clustCols[group]
-								
-								years <- rowMeans(thisVel[ , c('timeFrom', 'timeTo')])
-								lines(years, thisVel[ , metric], col=col, lwd=2)
-								
-							}
-						}
-					}
-					
-					# legend('topleft', inset=-0.01, legend=paste0('Group', 1:numModelClusts), col=clustCols[1:numModelClusts], lwd=1, cex=0.5, box.col='white')
-					
-				} # next only in shared cells
-				
-			} # next interval
-			
-			title(sub=date(), outer=TRUE, line=-1)
-			title(main=metricNice, outer=TRUE, line=0.8, cex.main=2.9)
-			
-		dev.off()
-		
-	} # next metric
-			
 #############################################
 say('DONE', deco='~', pre=2, post=2, level=1)
