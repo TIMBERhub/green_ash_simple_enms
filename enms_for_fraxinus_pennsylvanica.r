@@ -27,10 +27,10 @@
 ### plot model performance against present-day data ###
 ### assess differences between model output ###
 ### project models back in time ###
+### make maps of predictions ###
 ### calculate biotic velocity ###
 ### plot biotic velocity for periods < 21 Ka ###
 ### plot biotic velocity for periods of 21 Ka ###
-### make maps of predictions ###
 
 ### NOTES
 ### Variable naming conventions:
@@ -1038,9 +1038,6 @@
 	# set.seed(123)
 	
 	# for (countExt in seq_along(exts)) {
-	# # for (countExtent in 1) { # POWERBANK #4
-	# # for (countExtent in 2) { # POWERBANK #3
-	# # for (countExtent in 3) { # POWERBANK #??
 
 		# ext <- exts[countExtent]
 	
@@ -1615,6 +1612,239 @@
 		
 	# } # next GCM
 
+# say('################################')
+# say('### make maps of predictions ###')
+# say('################################')
+
+	# # study region
+	# studyRegionRasts <- brick(studyRegionRastsFileName)
+
+	# # map extent
+	# plotExtent <- extent(namSpAlbStudyRegion)
+	# plotExtent <- as(plotExtent, 'SpatialPolygons')
+	# projection(plotExtent) <- projection(namSpAlbStudyRegion)
+	
+	# load('./figures_and_tables/biotic_velocities.rda')
+	
+	# ### load prediction stacks
+	# preds <- list()
+	# for (algo in algos) {
+		# for (gcm in gcms) {
+			# for (ext in exts) {
+				# thesePreds <- brick(paste0('./predictions/', gcm, '_', ext, 'kmExtent_', algo, '.tif'))
+				# names(thesePreds) <- paste0('year', seq(21000, 0, by=-30), 'ybp')
+				# preds[[length(preds) + 1]] <- thesePreds
+				# names(preds)[[length(preds)]] <- paste0(gcm, '_', ext, 'kmExtent_', algo)
+			# }
+		# }
+	# }
+
+	# # clustering
+	# load('./figures_and_tables/agnes_cluster_of_models_based_on_rasters_21000ybp.rda')
+	# clustMembership <- cutree(clust21000ybp, k=numModelClusts)
+	# names(clustMembership) <- colnames(as.matrix(clust21000ybp$diss))
+
+	# # suitability raster colors
+	
+	# # cols <- c('gray83', '#f7fcfd','#e5f5f9','#ccece6','#99d8c9','#66c2a4','#41ae76','#238b45','#006d2c','#00441b')
+	# cols <- c('gray83', '#ccece6', '#99d8c9', '#66c2a4', '#41ae76', '#238b45', '#006d2c', '#00441b')
+	# breaks <- seq(0, 1, length.out=length(cols) + 1)
+	
+	# # colors for centroids and quantile markers
+	# colAllCells <- 'black'
+	# colConstantCells <- 'red'
+	
+	# currentLty <- 'dotted'
+	# centroidPathLwd <- 2
+	
+	# ### plot
+	# dirCreate('./figures_and_tables/series')
+	
+	# conts <- list() # contours of LGM rasters
+	# interval <- 30
+	# years <- seq(21000, 0, by=-30)
+	# for (countYear in seq_along(years)) {
+		
+		# year <- years[countYear]
+		# if (year %% 210 == 0) {
+			
+			# say(year)
+			
+			# png(paste0('./figures_and_tables/series/predicted_suitable_area_all_models_', prefix(21000 - year, 5), 'yr_after_21000ybp_', prefix(year, 5), 'ybp.png'), width=2400, height=1600)
+				
+				# par(mfrow=c(4, 7), oma=c(2, 2, 4, 2), mar=c(0, 0, 6, 0))
+			
+				# count <- 1
+				# plot(0, 0, col='white', fg='white', xaxt='n', yaxt='n', main='', xlim=c(0, 1), ylim=c(0, 1), ann=FALSE)
+
+				# # land
+				# year500 <- 500 * ceiling(year / 500)
+				# land <- getClimRasts('ccsm', year=year500, variables=predictors[1], rescale=FALSE)
+				# land <- land * 0
+				# land <- projectRaster(land, crs=projection(plotExtent))
+				# land <- crop(land, plotExtent)
+
+				# for (algo in algos) {
+					# for (gcm in gcms) {
+						# for (ext in exts) {
+
+							# # empty plots for time slider
+							# if (count %% 7 == 0) {
+								# plot(NA, fg='white', bg=NA, xaxt='n', yaxt='n', main='', xlim=c(0, 1), ylim=c(0, 1), ann=FALSE)
+								# count <- count + 1
+							# }
+							
+							# # time slider
+							# if (count == 22) {
+							
+								# mult <- 1.15 # relative height
+								# x <- 0.7
+								# y <- (1 - (year / 21000)) * 3.95 * mult * 1
+								# lines(c(x, x), c(0, 3.95 * mult * 1), lwd=50, col='gray70', xpd=NA)
+								# lines(c(x, x), c(0, y), lwd=50, col='gray20', xpd=NA)
+								# text(x, 0.17 + y, labels=paste(year, 'ybp'), cex=5, xpd=NA)
+							
+								# # legend
+								# y <- 0
+								# x <- -0.02
+								# points(x, y + 0, pch=1, col=colAllCells, cex=6, xpd=NA)
+								# lines(c(x, x), y + c(0, 0.20), col=colAllCells, xpd=NA, lwd=centroidPathLwd)
+								# text(x, y + 0.25, labels='Starting centroid and centroid path of all cells', srt=90, cex=4, adj=c(0, 0.5), xpd=NA, col=colAllCells)
+							
+								# x <- 0.1
+								# points(x, y + 0, pch=1, col=colConstantCells, cex=6, xpd=NA)
+								# lines(c(x, x), y + c(0, 0.20), col=colConstantCells, xpd=NA, lwd=centroidPathLwd)
+								# text(x, y + 0.25, labels='Starting centroid and centroid path of constantly-exposed, never-ice cells', srt=90, cex=4, adj=c(0, 0.5), xpd=NA, col=colConstantCells)
+							
+								# x <- 0.22
+								# lines(c(x, x), y + c(0, 0.06), col=colAllCells, xpd=NA, lwd=3)
+								# lines(c(x, x), y + c(0.14, 0.20), col=colAllCells, xpd=NA, lwd=3, lty=currentLty)
+								# text(x, y + 0.25, labels='Starting/current latitude of extreme 5th quantiles using all cells', srt=90, cex=4, adj=c(0, 0.5), xpd=NA, col=colAllCells)
+							
+								# x <- 0.34
+								# lines(c(x, x), y + c(0, 0.06), col=colConstantCells, xpd=NA, lwd=3)
+								# lines(c(x, x), y + c(0.14, 0.20), col=colConstantCells, xpd=NA, lwd=3, lty=currentLty)
+								# text(x, y + 0.25, labels='Starting/current latitude of extreme 5th quantiles using constantly-exposed, never-ice cells', srt=90, cex=4, adj=c(0, 0.5), xpd=NA, col=colConstantCells)
+							
+							# }
+							
+							# # plot extent
+							# thisOne <- paste0(gcm, '_', ext, 'kmExtent_', algo)
+							# boxCol <- clustCols[clustMembership[[thisOne]]]
+							# plot(plotExtent, border=NA, bg=NA, fg=NA, col=NA, ann=FALSE, main='')
+
+							# # land
+							# plot(land, col='gray90', legend=FALSE, add=TRUE)
+							
+							# # scenario class indicator (border)
+							# plot(plotExtent, border=boxCol, lwd=10, add=TRUE, fg=NA, bg=NA)
+							
+							# # predictions
+							# x <- preds[[thisOne]][[countYear]]
+							# plot(x, legend=FALSE, add=TRUE, col=cols, breaks=breaks)
+							
+							# ice <- studyRegionRasts[[countYear]]
+							# ice <- calc(ice, fun=function(x) ifelse(x == 1, 1, NA))
+							# plot(ice, col='steelblue1', legend=FALSE, add=TRUE)
+							
+							# plot(namSpAlbStudyRegion, add=TRUE, lwd=0.2, border='gray20')
+							
+							# # contours for LGM densities
+							# if (year == 21000) {
+								# quant <- quantile(x, 0.95)
+								# conts[[length(conts) + 1]] <- rasterToContour(x, level=quant)
+								# names(conts)[length(conts)] <- thisOne
+							# }
+							
+							# plot(conts[[thisOne]], add=TRUE)
+							
+							# #### quantile/centroid indicators
+
+								# ### centroids
+
+								# # starting centroids
+								# startCentroid_anyCells <- velocities[velocities$timeFrom == -21000 & velocities$timeSpan == interval & velocities$algo == algo & velocities$gcm == gcm & velocities$ext == ext & !velocities$onlyInSharedCells & !velocities$onlyInContinuouslyExposedLand, c('centroidLong', 'centroidLat')]
+								# startCentroid_constantCells <- velocities[velocities$timeFrom == -21000 & velocities$timeTo == -21000 + interval & velocities$algo == algo & velocities$gcm == gcm & velocities$ext == ext & velocities$onlyInSharedCells & velocities$onlyInContinuouslyExposedLand, c('centroidLong', 'centroidLat')]
+
+								# cex <- 3
+								# points(startCentroid_constantCells, pch=1, cex=cex, col=colConstantCells)
+								# points(startCentroid_anyCells, pch=1, cex=cex, col=colAllCells)
+								
+								# ### centroid paths
+
+								# startCentroid_constantCells_path <- velocities[velocities$timeFrom <= -1 * year & velocities$timeSpan == interval & velocities$algo == algo & velocities$gcm == gcm & velocities$ext == ext & velocities$onlyInContinuouslyExposedLand, c('centroidLong', 'centroidLat')]
+								# startCentroid_allCells_path <- velocities[velocities$timeFrom <= -1 * year & velocities$timeSpan == interval & velocities$algo == algo & velocities$gcm == gcm & velocities$ext == ext & !velocities$onlyInSharedCells & !velocities$onlyInContinuouslyExposedLand, c('centroidLong', 'centroidLat')]
+
+								# lines(startCentroid_constantCells_path$centroidLong, startCentroid_constantCells_path$centroidLat, col=colConstantCells, lwd=2)
+								# lines(startCentroid_allCells_path$centroidLong, startCentroid_constantCells_path$centroidLat, col=colAllCells, lwd=2)
+								
+								# ### northern/southern latitude markers
+								
+								# # quantile locations
+								# right <- xmax(plotExtent)
+								# left <- xmin(plotExtent) + 0.02 * (xmax(plotExtent) - xmin(plotExtent))
+								# width <- right - left
+								# extension <- 0.06
+								
+								# # starting latitude of 5th quantile
+								# latConstant <- velocities[velocities$timeFrom == -21000 & velocities$timeSpan == interval & velocities$algo == algo & velocities$gcm == gcm & velocities$ext == ext & velocities$onlyInSharedCells & velocities$onlyInContinuouslyExposedLand, c('nsQuantLat_quant0p05')]
+
+								# latAll <- velocities[velocities$timeFrom == -21000 & velocities$timeSpan == interval & velocities$algo == algo & velocities$gcm == gcm & velocities$ext == ext & !velocities$onlyInSharedCells & !velocities$onlyInContinuouslyExposedLand, c('nsQuantLat_quant0p05')]
+								
+								# lines(c(left, left + width * extension), c(latAll, latAll), col=colConstantCells, lwd=cex)
+								# lines(c(left, left + width * extension), c(latAll, latAll), col=colAllCells, lwd=cex)
+
+								# # current latitude of 5th quantile
+								# if (year < 21000) {
+									
+									# latConstant <- velocities[velocities$timeFrom == -1 * year - interval & velocities$timeTo == -1 * year & velocities$algo == algo & velocities$gcm == gcm & velocities$ext == ext & velocities$onlyInSharedCells & velocities$onlyInContinuouslyExposedLand, c('nsQuantLat_quant0p05')]
+								
+									# latAll <- velocities[velocities$timeFrom == -1 * year - interval & velocities$timeTo == -1 * year & velocities$algo == algo & velocities$gcm == gcm & velocities$ext == ext & !velocities$onlyInSharedCells & !velocities$onlyInContinuouslyExposedLand, c('nsQuantLat_quant0p05')]
+									
+									# lines(c(left, left + width * extension), c(latConstant, latConstant), col=colConstantCells, lwd=cex, lty=currentLty)
+									# lines(c(left, left + width * extension), c(latAll, latAll), col=colAllCells, lwd=cex, lty=currentLty)
+
+								# }
+
+								# # starting latitude of 95th quantile
+								# latConstant <- velocities[velocities$timeFrom == -21000 & velocities$timeSpan == interval & velocities$algo == algo & velocities$gcm == gcm & velocities$ext == ext & velocities$onlyInSharedCells & velocities$onlyInContinuouslyExposedLand, c('nsQuantLat_quant0p95')]
+
+								# latAll <- velocities[velocities$timeFrom == -21000 & velocities$timeSpan == interval & velocities$algo == algo & velocities$gcm == gcm & velocities$ext == ext & !velocities$onlyInSharedCells & !velocities$onlyInContinuouslyExposedLand, c('nsQuantLat_quant0p95')]
+								
+								# lines(c(left, left + width * extension), c(latConstant, latConstant), col=colConstantCells, lwd=cex)
+								
+								# lines(c(left, left + width * extension), c(latAll, latAll), col=colAllCells, lwd=cex)
+
+								# # current latitude of 95th quantile
+								# if (year < 21000) {
+								
+									# latConstant <- velocities[velocities$timeFrom == -1 * year - interval & velocities$timeTo == -1 * year & velocities$algo == algo & velocities$gcm == gcm & velocities$ext == ext & velocities$onlyInSharedCells & velocities$onlyInContinuouslyExposedLand, c('nsQuantLat_quant0p95')]
+								
+									# latAll <- velocities[velocities$timeFrom == -1 * year - interval & velocities$timeTo == -1 * year & velocities$algo == algo & velocities$gcm == gcm & velocities$ext == ext & !velocities$onlyInSharedCells & !velocities$onlyInContinuouslyExposedLand, c('nsQuantLat_quant0p95')]
+								
+									# lines(c(left, left + width * extension), c(latConstant, latConstant), col=colConstantCells, lwd=cex, lty=currentLty)
+									# lines(c(left, left + width * extension), c(latAll, latAll), col=colAllCells, lwd=cex, lty=currentLty)
+
+								# }
+								
+							# main <- paste(toupper(gcm), '\n', ext, '-km extent ', toupper(algo), collapse='', sep='')
+							# title(main, line=0, cex.main=3.3, xpd=NA)
+							
+							# count <- count + 1
+
+						# }
+					# }
+				# }
+				
+			# # mtext(paste(year, 'YBP'), outer=TRUE, xpd=NA, cex=4, font=2)
+			# mtext(date(), side=1, cex=1, outer=TRUE)
+
+			# dev.off()
+			
+		# } # if plotting this year
+
+	# } # next year
+		
 # say('#################################')
 # say('### calculate biotic velocity ###')
 # say('#################################')
@@ -1942,238 +2172,5 @@
 			
 	# } # next metric
 			
-# say('################################')
-# say('### make maps of predictions ###')
-# say('################################')
-
-	# # study region
-	# studyRegionRasts <- brick(studyRegionRastsFileName)
-
-	# # map extent
-	# plotExtent <- extent(namSpAlbStudyRegion)
-	# plotExtent <- as(plotExtent, 'SpatialPolygons')
-	# projection(plotExtent) <- projection(namSpAlbStudyRegion)
-	
-	# load('./figures_and_tables/biotic_velocities.rda')
-	
-	# ### load prediction stacks
-	# preds <- list()
-	# for (algo in algos) {
-		# for (gcm in gcms) {
-			# for (ext in exts) {
-				# thesePreds <- brick(paste0('./predictions/', gcm, '_', ext, 'kmExtent_', algo, '.tif'))
-				# names(thesePreds) <- paste0('year', seq(21000, 0, by=-30), 'ybp')
-				# preds[[length(preds) + 1]] <- thesePreds
-				# names(preds)[[length(preds)]] <- paste0(gcm, '_', ext, 'kmExtent_', algo)
-			# }
-		# }
-	# }
-
-	# # clustering
-	# load('./figures_and_tables/agnes_cluster_of_models_based_on_rasters_21000ybp.rda')
-	# clustMembership <- cutree(clust21000ybp, k=numModelClusts)
-	# names(clustMembership) <- colnames(as.matrix(clust21000ybp$diss))
-
-	# # suitability raster colors
-	
-	# # cols <- c('gray83', '#f7fcfd','#e5f5f9','#ccece6','#99d8c9','#66c2a4','#41ae76','#238b45','#006d2c','#00441b')
-	# cols <- c('gray83', '#ccece6', '#99d8c9', '#66c2a4', '#41ae76', '#238b45', '#006d2c', '#00441b')
-	# breaks <- seq(0, 1, length.out=length(cols) + 1)
-	
-	# # colors for centroids and quantile markers
-	# colAllCells <- 'black'
-	# colConstantCells <- 'red'
-	
-	# currentLty <- 'dotted'
-	# centroidPathLwd <- 2
-	
-	# ### plot
-	# dirCreate('./figures_and_tables/series')
-	
-	# conts <- list() # contours of LGM rasters
-	# interval <- 30
-	# years <- seq(21000, 0, by=-30)
-	# for (countYear in seq_along(years)) {
-		
-		# year <- years[countYear]
-		# if (year %% 210 == 0) {
-			
-			# say(year)
-			
-			# png(paste0('./figures_and_tables/series/predicted_suitable_area_all_models_', prefix(21000 - year, 5), 'yr_after_21000ybp_', prefix(year, 5), 'ybp.png'), width=2400, height=1600)
-				
-				# par(mfrow=c(4, 7), oma=c(2, 2, 4, 2), mar=c(0, 0, 6, 0))
-			
-				# count <- 1
-				# plot(0, 0, col='white', fg='white', xaxt='n', yaxt='n', main='', xlim=c(0, 1), ylim=c(0, 1), ann=FALSE)
-
-				# # land
-				# year500 <- 500 * ceiling(year / 500)
-				# land <- getClimRasts('ccsm', year=year500, variables=predictors[1], rescale=FALSE)
-				# land <- land * 0
-				# land <- projectRaster(land, crs=projection(plotExtent))
-				# land <- crop(land, plotExtent)
-
-				# for (algo in algos) {
-					# for (gcm in gcms) {
-						# for (ext in exts) {
-
-							# # empty plots for time slider
-							# if (count %% 7 == 0) {
-								# plot(NA, fg='white', bg=NA, xaxt='n', yaxt='n', main='', xlim=c(0, 1), ylim=c(0, 1), ann=FALSE)
-								# count <- count + 1
-							# }
-							
-							# # time slider
-							# if (count == 22) {
-							
-								# mult <- 1.15 # relative height
-								# x <- 0.7
-								# y <- (1 - (year / 21000)) * 3.95 * mult * 1
-								# lines(c(x, x), c(0, 3.95 * mult * 1), lwd=50, col='gray70', xpd=NA)
-								# lines(c(x, x), c(0, y), lwd=50, col='gray20', xpd=NA)
-								# text(x, 0.17 + y, labels=paste(year, 'ybp'), cex=5, xpd=NA)
-							
-								# # legend
-								# y <- 0
-								# x <- -0.02
-								# points(x, y + 0, pch=1, col=colAllCells, cex=6, xpd=NA)
-								# lines(c(x, x), y + c(0, 0.20), col=colAllCells, xpd=NA, lwd=centroidPathLwd)
-								# text(x, y + 0.25, labels='Starting centroid and centroid path of all cells', srt=90, cex=4, adj=c(0, 0.5), xpd=NA, col=colAllCells)
-							
-								# x <- 0.1
-								# points(x, y + 0, pch=1, col=colConstantCells, cex=6, xpd=NA)
-								# lines(c(x, x), y + c(0, 0.20), col=colConstantCells, xpd=NA, lwd=centroidPathLwd)
-								# text(x, y + 0.25, labels='Starting centroid and centroid path of constantly-exposed, never-ice cells', srt=90, cex=4, adj=c(0, 0.5), xpd=NA, col=colConstantCells)
-							
-								# x <- 0.22
-								# lines(c(x, x), y + c(0, 0.06), col=colAllCells, xpd=NA, lwd=3)
-								# lines(c(x, x), y + c(0.14, 0.20), col=colAllCells, xpd=NA, lwd=3, lty=currentLty)
-								# text(x, y + 0.25, labels='Starting/current latitude of extreme 5th quantiles using all cells', srt=90, cex=4, adj=c(0, 0.5), xpd=NA, col=colAllCells)
-							
-								# x <- 0.34
-								# lines(c(x, x), y + c(0, 0.06), col=colConstantCells, xpd=NA, lwd=3)
-								# lines(c(x, x), y + c(0.14, 0.20), col=colConstantCells, xpd=NA, lwd=3, lty=currentLty)
-								# text(x, y + 0.25, labels='Starting/current latitude of extreme 5th quantiles using constantly-exposed, never-ice cells', srt=90, cex=4, adj=c(0, 0.5), xpd=NA, col=colConstantCells)
-							
-							# }
-							
-							# # plot extent
-							# thisOne <- paste0(gcm, '_', ext, 'kmExtent_', algo)
-							# boxCol <- clustCols[clustMembership[[thisOne]]]
-							# plot(plotExtent, border=NA, bg=NA, fg=NA, col=NA, ann=FALSE, main='')
-
-							# # land
-							# plot(land, col='gray90', legend=FALSE, add=TRUE)
-							
-							# # scenario class indicator (border)
-							# plot(plotExtent, border=boxCol, lwd=10, add=TRUE, fg=NA, bg=NA)
-							
-							# # predictions
-							# x <- preds[[thisOne]][[countYear]]
-							# plot(x, legend=FALSE, add=TRUE, col=cols, breaks=breaks)
-							
-							# ice <- studyRegionRasts[[countYear]]
-							# ice <- calc(ice, fun=function(x) ifelse(x == 1, 1, NA))
-							# plot(ice, col='steelblue1', legend=FALSE, add=TRUE)
-							
-							# plot(namSpAlbStudyRegion, add=TRUE, lwd=0.2, border='gray20')
-							
-							# # contours for LGM densities
-							# if (year == 21000) {
-								# quant <- quantile(x, 0.95)
-								# conts[[length(conts) + 1]] <- rasterToContour(x, level=quant)
-								# names(conts)[length(conts)] <- thisOne
-							# }
-							
-							# plot(conts[[thisOne]], add=TRUE)
-							
-							# #### quantile/centroid indicators
-
-								# ### centroids
-
-								# # starting centroids
-								# startCentroid_anyCells <- velocities[velocities$timeFrom == -21000 & velocities$timeSpan == interval & velocities$algo == algo & velocities$gcm == gcm & velocities$ext == ext & !velocities$onlyInSharedCells & !velocities$onlyInContinuouslyExposedLand, c('centroidLong', 'centroidLat')]
-								# startCentroid_constantCells <- velocities[velocities$timeFrom == -21000 & velocities$timeTo == -21000 + interval & velocities$algo == algo & velocities$gcm == gcm & velocities$ext == ext & velocities$onlyInSharedCells & velocities$onlyInContinuouslyExposedLand, c('centroidLong', 'centroidLat')]
-
-								# cex <- 3
-								# points(startCentroid_constantCells, pch=1, cex=cex, col=colConstantCells)
-								# points(startCentroid_anyCells, pch=1, cex=cex, col=colAllCells)
-								
-								# ### centroid paths
-
-								# startCentroid_constantCells_path <- velocities[velocities$timeFrom <= -1 * year & velocities$timeSpan == interval & velocities$algo == algo & velocities$gcm == gcm & velocities$ext == ext & velocities$onlyInContinuouslyExposedLand, c('centroidLong', 'centroidLat')]
-								# startCentroid_allCells_path <- velocities[velocities$timeFrom <= -1 * year & velocities$timeSpan == interval & velocities$algo == algo & velocities$gcm == gcm & velocities$ext == ext & !velocities$onlyInSharedCells & !velocities$onlyInContinuouslyExposedLand, c('centroidLong', 'centroidLat')]
-
-								# lines(startCentroid_constantCells_path$centroidLong, startCentroid_constantCells_path$centroidLat, col=colConstantCells, lwd=2)
-								# lines(startCentroid_allCells_path$centroidLong, startCentroid_constantCells_path$centroidLat, col=colAllCells, lwd=2)
-								
-								# ### northern/southern latitude markers
-								
-								# # quantile locations
-								# right <- xmax(plotExtent)
-								# left <- xmin(plotExtent) + 0.02 * (xmax(plotExtent) - xmin(plotExtent))
-								# width <- right - left
-								# extension <- 0.06
-								
-								# # starting latitude of 5th quantile
-								# latConstant <- velocities[velocities$timeFrom == -21000 & velocities$timeSpan == interval & velocities$algo == algo & velocities$gcm == gcm & velocities$ext == ext & velocities$onlyInSharedCells & velocities$onlyInContinuouslyExposedLand, c('nsQuantLat_quant0p05')]
-
-								# latAll <- velocities[velocities$timeFrom == -21000 & velocities$timeSpan == interval & velocities$algo == algo & velocities$gcm == gcm & velocities$ext == ext & !velocities$onlyInSharedCells & !velocities$onlyInContinuouslyExposedLand, c('nsQuantLat_quant0p05')]
-								
-								# lines(c(left, left + width * extension), c(latAll, latAll), col=colConstantCells, lwd=cex)
-								# lines(c(left, left + width * extension), c(latAll, latAll), col=colAllCells, lwd=cex)
-
-								# # current latitude of 5th quantile
-								# if (year < 21000) {
-									
-									# latConstant <- velocities[velocities$timeFrom == -1 * year - interval & velocities$timeTo == -1 * year & velocities$algo == algo & velocities$gcm == gcm & velocities$ext == ext & velocities$onlyInSharedCells & velocities$onlyInContinuouslyExposedLand, c('nsQuantLat_quant0p05')]
-								
-									# latAll <- velocities[velocities$timeFrom == -1 * year - interval & velocities$timeTo == -1 * year & velocities$algo == algo & velocities$gcm == gcm & velocities$ext == ext & !velocities$onlyInSharedCells & !velocities$onlyInContinuouslyExposedLand, c('nsQuantLat_quant0p05')]
-									
-									# lines(c(left, left + width * extension), c(latConstant, latConstant), col=colConstantCells, lwd=cex, lty=currentLty)
-									# lines(c(left, left + width * extension), c(latAll, latAll), col=colAllCells, lwd=cex, lty=currentLty)
-
-								# }
-
-								# # starting latitude of 95th quantile
-								# latConstant <- velocities[velocities$timeFrom == -21000 & velocities$timeSpan == interval & velocities$algo == algo & velocities$gcm == gcm & velocities$ext == ext & velocities$onlyInSharedCells & velocities$onlyInContinuouslyExposedLand, c('nsQuantLat_quant0p95')]
-
-								# latAll <- velocities[velocities$timeFrom == -21000 & velocities$timeSpan == interval & velocities$algo == algo & velocities$gcm == gcm & velocities$ext == ext & !velocities$onlyInSharedCells & !velocities$onlyInContinuouslyExposedLand, c('nsQuantLat_quant0p95')]
-								
-								# lines(c(left, left + width * extension), c(latConstant, latConstant), col=colConstantCells, lwd=cex)
-								
-								# lines(c(left, left + width * extension), c(latAll, latAll), col=colAllCells, lwd=cex)
-
-								# # current latitude of 95th quantile
-								# if (year < 21000) {
-								
-									# latConstant <- velocities[velocities$timeFrom == -1 * year - interval & velocities$timeTo == -1 * year & velocities$algo == algo & velocities$gcm == gcm & velocities$ext == ext & velocities$onlyInSharedCells & velocities$onlyInContinuouslyExposedLand, c('nsQuantLat_quant0p95')]
-								
-									# latAll <- velocities[velocities$timeFrom == -1 * year - interval & velocities$timeTo == -1 * year & velocities$algo == algo & velocities$gcm == gcm & velocities$ext == ext & !velocities$onlyInSharedCells & !velocities$onlyInContinuouslyExposedLand, c('nsQuantLat_quant0p95')]
-								
-									# lines(c(left, left + width * extension), c(latConstant, latConstant), col=colConstantCells, lwd=cex, lty=currentLty)
-									# lines(c(left, left + width * extension), c(latAll, latAll), col=colAllCells, lwd=cex, lty=currentLty)
-
-								# }
-								
-							# main <- paste(toupper(gcm), '\n', ext, '-km extent ', toupper(algo), collapse='', sep='')
-							# title(main, line=0, cex.main=3.3, xpd=NA)
-							
-							# count <- count + 1
-
-						# }
-					# }
-				# }
-				
-			# # mtext(paste(year, 'YBP'), outer=TRUE, xpd=NA, cex=4, font=2)
-			# mtext(date(), side=1, cex=1, outer=TRUE)
-
-			# dev.off()
-			
-		# } # if plotting this year
-
-	# } # next year
-		
 #############################################
 say('DONE', deco='~', pre=2, post=2, level=1)
