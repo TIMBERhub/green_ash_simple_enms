@@ -27,7 +27,8 @@
 ### plot model performance against present-day data ###
 ### assess differences between model output ###
 ### project models back in time ###
-### make maps of predictions ###
+### make maps of unthresholded predictions ###
+### determine thresholds that best recreate Little range ###
 ### calculate biotic velocity ###
 ### plot biotic velocity for periods < 21 Ka ###
 ### plot biotic velocity for periods of 21 Ka ###
@@ -1612,9 +1613,99 @@
 		
 	# } # next GCM
 
-# say('################################')
-# say('### make maps of predictions ###')
-# say('################################')
+# say('############################################################')
+# say('### determine thresholds that best recreate Little range ###')
+# say('############################################################')
+
+	# # get threshold for sensitivity at this value
+	# seThold <- 0.9
+
+	# thresholds <- data.frame()
+
+	# for (gcm in gcms) {
+
+		# for (ext in exts) {
+
+			# for (algo in algos) {
+			
+				# say(paste(gcm, ext, algo))
+			
+				# rasts <- stack(paste0('./predictions/', gcm, '_', ext, 'kmExtent_', algo, '.tif'))
+				# present <- subset(rasts, 701)
+				
+				# # extract predictions from cells inside or overlapping Little's range
+				# insideLittleList <- raster::extract(present, littleRangeSpAlb, weights=TRUE, normalizeWeights=FALSE, cellnumbers=TRUE)
+				
+				# inside <- data.frame()
+				# for (i in seq_along(insideLittleList)) inside <- rbind(inside, insideLittleList[[i]])
+				# aggSum <- aggregate(inside, by=list(inside$cell), 'sum')
+				# aggMean <- aggregate(inside, by=list(inside$cell), 'mean', na.rm=TRUE)
+				
+				# inside <- data.frame(cell=aggSum$cell, pred=aggMean$value, weight=aggSum$weight)
+				# if (any(inside$weight > 1)) inside$weight[inside$weight > 1] <- 1
+				
+				# # extract predictions to cells outside or overlapping Little's range
+				# outside <- as.vector(present)
+				# outside <- data.frame(
+					# cell=1:ncell(present),
+					# pred=outside,
+					# weight=1
+				# )
+				
+				# # adjust weights of predictions outside Little range by proportion of cell inside the range
+				# for (i in 1:nrow(inside)) {
+					# outside$weight[outside$cell == i] = 1 - inside$weight[i]
+				# }
+				
+				# # AUC
+				# auc <- aucWeighted(inside$pred, outside$pred, presWeight=inside$weight, contrastWeight=outside$weight, na.rm=TRUE)
+				
+				# # CBI
+				# cbi <- contBoyce(inside$pred, outside$pred, presWeight=inside$weight, na.rm=TRUE)
+				
+				# # determine threshold that maximizes TSS
+				# best <- c(NA, -Inf)
+				# names(best) <- c('threshold', 'tss')
+				# for (thold in seq(0, 1, by=0.0001)) {
+				
+					# tss <- tssWeighted(inside$pred, outside$pred, presWeight=inside$weight, contrastWeight=outside$weight, na.rm=TRUE, thresholds=thold)
+					
+					# if (tss > best[['tss']]) {
+						# best[['threshold']] <- thold
+						# best[['tss']] <- tss
+					# }
+				
+				# }
+				
+				# stats <- thresholdStats(best[['threshold']], inside$pred, outside$pred, presWeight=inside$weight, contrastWeight=outside$weight, na.rm=TRUE)
+				
+				# thresholds <- rbind(
+					# thresholds,
+					# data.frame(
+						# gcm = gcm,
+						# extent = ext,
+						# algorithm = algo,
+						# threshold = best[['threshold']],
+						# auc = auc,
+						# cbi = cbi,
+						# tss = best[['tss']],
+						# se = stats[['sensitivity']],
+						# sp = stats[['specificity']]
+					# )
+				# )
+				
+				
+			# } # next algorithm
+			
+		# } # next extent
+		
+	# } # next GCM
+	
+	# write.csv(thresholds, './figures_and_tables/thresholds.csv', row.names=FALSE)
+
+# say('##############################################')
+# say('### make maps of unthresholded predictions ###')
+# say('##############################################')
 
 	# # study region
 	# studyRegionRasts <- brick(studyRegionRastsFileName)
