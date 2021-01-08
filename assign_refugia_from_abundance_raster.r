@@ -68,9 +68,9 @@ assign_refugia_from_abundance_raster <- function(
 	names(maskAbund) <- 'mask'
 	
 	# identify refugia
-	idsAbund <- clump(maskAbund, directions=8, gaps=FALSE)
+	idsAbund <- raster::clump(maskAbund, directions=8, gaps=FALSE)
 	names(idsAbund) <- 'id'
-	numRefugia <- cellStats(idsAbund, 'max')
+	numRefugia <- raster::cellStats(idsAbund, 'max')
 	
 	# abundance in refugial cells
 	abundRefugeAbund <- abund * maskAbund
@@ -169,6 +169,7 @@ assign_refugia_from_abundance_raster <- function(
 	names(idsSim) <- 'id'
 	names(abundSim) <- 'abundance'
 	
+	# return intermediate-step rasters if desired
 	if (intermediate) {
 		list(sim=raster::stack(idsSim, abundSim), abund=suitStack[[c('id', 'abundRefuge')]])
 	} else {
