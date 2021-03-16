@@ -27,9 +27,10 @@
 ### plot model performance against present-day data ###
 ### assess differences between model output ###
 ### project models back in time ###
+### determine thresholds that best recreate Little range ###
 ### make maps of unthresholded predictions ###
 ### make maps of thresholded predictions ###
-### determine thresholds that best recreate Little range ###
+### collage ENMs for demographic simulations ###
 ### calculate biotic velocity ###
 ### plot biotic velocity for periods < 21 Ka ###
 ### plot biotic velocity for periods of 21 Ka ###
@@ -89,6 +90,7 @@
 	library(cluster)
 	library(dismo)
 	library(geosphere)
+	library(holoSimCell)
 	library(rgdal)
 	library(raster)
 	library(RColorBrewer)
@@ -102,7 +104,7 @@
 	library(statisfactory) # Adam's statistics library (https://github.com/adamlilith/statisfactory)
 	library(legendary) # Adam's plotting library (https://github.com/adamlilith/legenday)
 	
-	source('./code/assign_refugia_from_abundance_raster.r')
+	# source('./code/assign_refugia_from_abundance_raster.r')
 	
 	dirCreate(tempDir)
 	
@@ -1939,130 +1941,202 @@
 
 	# } # next year
 		
-say('############################################')
-say('### make maps of thresholded predictions ###')
-say('############################################')
+# say('############################################')
+# say('### make maps of thresholded predictions ###')
+# say('############################################')
 
-	# study region
-	studyRegionRasts <- brick(studyRegionRastsFileName)
+	# # study region
+	# studyRegionRasts <- brick(studyRegionRastsFileName)
 
-	# map extent
-	plotExtent <- extent(namSpAlbStudyRegion)
-	plotExtent <- as(plotExtent, 'SpatialPolygons')
-	projection(plotExtent) <- projection(namSpAlbStudyRegion)
+	# # map extent
+	# plotExtent <- extent(namSpAlbStudyRegion)
+	# plotExtent <- as(plotExtent, 'SpatialPolygons')
+	# projection(plotExtent) <- projection(namSpAlbStudyRegion)
 	
-	### thresholds
+	# ### thresholds
+	# thresholds <- read.csv('./figures_and_tables/thresholds.csv')
+	
+	# ### load prediction stacks
+	# preds <- list()
+	# for (algo in algos) {
+		# for (gcm in gcms) {
+			# for (ext in exts) {
+				# thesePreds <- brick(paste0('./predictions/', gcm, '_', ext, 'kmExtent_', algo, '.tif'))
+				# names(thesePreds) <- paste0('year', seq(21000, 0, by=-30), 'ybp')
+				# preds[[length(preds) + 1]] <- thesePreds
+				# names(preds)[[length(preds)]] <- paste0(gcm, '_', ext, 'kmExtent_', algo)
+			# }
+		# }
+	# }
+
+	# ### plot
+	# dirCreate('./figures_and_tables/refugia_and_current_range')
+	
+	# # land
+	# lgmLand <- getClimRasts('ccsm', year=21000, variables=predictors[1], rescale=FALSE)
+	# lgmLand <- lgmLand * 0
+	# lgmLand <- projectRaster(lgmLand, crs=projection(plotExtent))
+	# lgmLand <- crop(lgmLand, plotExtent)
+
+	# sqLand <- getClimRasts('ccsm', year=0, variables=predictors[1], rescale=FALSE)
+	# sqLand <- sqLand * 0
+	# sqLand <- projectRaster(sqLand, crs=projection(plotExtent))
+	# sqLand <- crop(sqLand, plotExtent)
+
+	# # simulation raster (same resolution/extent as raster used for genetic/demographic simulations)
+	# simRast <- raster(demoGeneticRasterTemplate)
+
+	# for (gcm in gcms) {
+
+		# for (ext in exts) {
+
+			# say(gcm, ' ', ext)
+
+			# png(paste0('./figures_and_tables/refugia_and_current_range/', gcm, '_', ext, '_extent.png'), width=2400, height=1350)
+				
+			# par(mfrow=c(2, 4), oma=c(2, 2, 4, 2), mar=c(0, 0, 6, 0))
+
+			# for (algo in algos) {
+		
+				# pred <- preds[[paste0(gcm, '_', ext, 'kmExtent_', algo)]]
+		
+				# ### LGM
+				# x <- pred[[1]]
+				# land <- lgmLand
+				
+				# # thresholded predictions
+				# thold <- thresholds$threshold[thresholds$gcm == gcm & thresholds$extent == ext & thresholds$algorithm == algo]
+
+				# x <- assign_refugia_from_abundance_raster(x, simRast, threshold=thold)
+				# numRefugia <- cellStats(x[['id']], 'max')
+				# cols <- rainbow(numRefugia)
+				# cols <- alpha(cols, 0.8)
+
+				# # plot extent
+				# plot(plotExtent, border=NA, bg=NA, fg=NA, col=NA, ann=FALSE, main='')
+				# plot(land, col='gray80', legend=FALSE, add=TRUE)
+				# plot(x[['id']], legend=FALSE, add=TRUE, col=cols)
+				
+				# ice <- studyRegionRasts[[1]]
+				# ice <- calc(ice, fun=function(x) ifelse(x == 1, 1, NA))
+				# # plot(ice, col=alpha('steelblue1', 0.5), legend=FALSE, add=TRUE)
+				# plot(ice, col='darkgray', legend=FALSE, add=TRUE)
+
+				# labelFig(paste0(toupper(algo), ' using ', toupper(gcm), ' with ', ext, '-km extent'), adj=c(0.65, 0.01), cex=4.2)
+				
+				# labelFig('LGM', adj=c(0.08, -0.08), cex=3.8)
+				# text <- if (numRefugia == 1) { '1 refugium' } else { paste(numRefugia, 'refugia') }
+				# labelFig(text, adj=c(0.08, -0.14), cex=3.8)
+				# labelFig('ice', adj=c(0.5, -0.3), cex=3)
+		
+				# ### SQ
+				# x <- pred[[701]]
+				# land <- sqLand
+				
+				# # thresholded predictions
+				# thold <- thresholds$threshold[thresholds$gcm == gcm & thresholds$extent == ext & thresholds$algorithm == algo]
+
+				# x <- x >= thold
+				# x <- calc(x, fun=function(x) ifelse(x == 0, NA, x))
+				# cols <- alpha('forestgreen', 0.7)
+
+				# # plot extent
+				# plot(plotExtent, border=NA, bg=NA, fg=NA, col=NA, ann=FALSE, main='')
+				# plot(land, col='gray80', legend=FALSE, add=TRUE)
+				# plot(littleRangeSpAlb, col='orange', border='darkorange4', lwd=2, add=TRUE)
+				# plot(x, legend=FALSE, add=TRUE, col=cols)
+				
+				# tss <- thresholds$tss[thresholds$gcm == gcm & thresholds$extent == ext & thresholds$algorithm == algo]
+				# se <- thresholds$se[thresholds$gcm == gcm & thresholds$extent == ext & thresholds$algorithm == algo]
+				# sp <- thresholds$sp[thresholds$gcm == gcm & thresholds$extent == ext & thresholds$algorithm == algo]
+				
+				# legend('bottomright', inset=c(0.08, 0.17), legend=c('Little', 'Predicted'), fill=c('orange', alpha('forestgreen', 0.7)), border=c('darkorange4', NA), bty='n', cex=2.5, xpd=NA)
+				
+				# labelFig('Present', adj=c(0.08, -0.08), cex=3.8)
+				# labelFig(paste0('TSS: ', sprintf('%.2f', tss), ' | Se = ', sprintf('%.2f', se), ' | Sp = ', sprintf('%.2f', sp)), adj=c(0.08, -0.14), cex=3.8)
+		
+			# } # next algorithm
+			
+			# mtext('LGM and Present-Day Predicted Distributions', side=3, cex=3.8, outer=TRUE, line=-0.5)
+			# mtext(date(), side=1, cex=1, outer=TRUE)
+
+			# dev.off()
+			
+		# } # next extent
+
+	# } # next GCM
+		
+say('################################################')
+say('### collage ENMs for demographic simulations ###')
+say('################################################')
+
+	say('This section collates the ENMs metadata into a list object for passing into holoSimCell.', breaks=80, post=2)
+
+	# model performance statistics and thresholds
 	thresholds <- read.csv('./figures_and_tables/thresholds.csv')
+	thresholds$numRefugia <- NA
 	
-	### load prediction stacks
-	preds <- list()
-	for (algo in algos) {
-		for (gcm in gcms) {
-			for (ext in exts) {
-				thesePreds <- brick(paste0('./predictions/', gcm, '_', ext, 'kmExtent_', algo, '.tif'))
-				names(thesePreds) <- paste0('year', seq(21000, 0, by=-30), 'ybp')
-				preds[[length(preds) + 1]] <- thesePreds
-				names(preds)[[length(preds)]] <- paste0(gcm, '_', ext, 'kmExtent_', algo)
-			}
-		}
-	}
+	# demo/genetic simulation template raster
+	sim <- raster(demoGeneticRasterTemplate)
 
-	### plot
-	dirCreate('./figures_and_tables/refugia_and_current_range')
-	
-	# land
-	lgmLand <- getClimRasts('ccsm', year=21000, variables=predictors[1], rescale=FALSE)
-	lgmLand <- lgmLand * 0
-	lgmLand <- projectRaster(lgmLand, crs=projection(plotExtent))
-	lgmLand <- crop(lgmLand, plotExtent)
-
-	sqLand <- getClimRasts('ccsm', year=0, variables=predictors[1], rescale=FALSE)
-	sqLand <- sqLand * 0
-	sqLand <- projectRaster(sqLand, crs=projection(plotExtent))
-	sqLand <- crop(sqLand, plotExtent)
-
-	# simulation raster (same resolution/extent as raster used for genetic/demographic simulations)
-	simRast <- raster(demoGeneticRasterTemplate)
+	# object to send to demographic simulations
+	enmScenarios <- list()
+	enmScenarios$enms <- data.frame()
+	enmScenarios$refugeCellIds <- list()
 
 	for (gcm in gcms) {
 
 		for (ext in exts) {
 
-			say(gcm, ' ', ext)
-
-			png(paste0('./figures_and_tables/refugia_and_current_range/', gcm, '_', ext, '_extent.png'), width=2400, height=1350)
-				
-			par(mfrow=c(2, 4), oma=c(2, 2, 4, 2), mar=c(0, 0, 6, 0))
-
 			for (algo in algos) {
+				
+				say(gcm, ' ', ext, ' ', algo)
+
+				this <- which(thresholds$gcm == gcm & thresholds$extent == ext & thresholds$algo == algo)
+
+				# threshold
+				threshold <- thresholds$threshold[this]
 		
-				pred <- preds[[paste0(gcm, '_', ext, 'kmExtent_', algo)]]
-		
-				### LGM
-				x <- pred[[1]]
-				land <- lgmLand
-				
-				# thresholded predictions
-				thold <- thresholds$threshold[thresholds$gcm == gcm & thresholds$extent == ext & thresholds$algorithm == algo]
+				# get rasters
+				rasts <- stack(paste0('./predictions/', gcm, '_' , ext, 'kmExtent_', algo, '.tif'))
+				first <- rasts[[1]]
 
-				x <- assign_refugia_from_abundance_raster(x, simRast, threshold=thold)
-				numRefugia <- cellStats(x[['id']], 'max')
-				cols <- rainbow(numRefugia)
-				cols <- alpha(cols, 0.8)
+				refs <- assignRefugiaFromAbundanceRaster(first, sim=sim, threshold=threshold)
+				thresholds$numRefugia[this] <- cellStats(refs$simulationScale[['id']], 'max')
 
-				# plot extent
-				plot(plotExtent, border=NA, bg=NA, fg=NA, col=NA, ann=FALSE, main='')
-				plot(land, col='gray80', legend=FALSE, add=TRUE)
-				plot(x[['id']], legend=FALSE, add=TRUE, col=cols)
-				
-				ice <- studyRegionRasts[[1]]
-				ice <- calc(ice, fun=function(x) ifelse(x == 1, 1, NA))
-				# plot(ice, col=alpha('steelblue1', 0.5), legend=FALSE, add=TRUE)
-				plot(ice, col='darkgray', legend=FALSE, add=TRUE)
+				setString <- paste0(gcm, '_' , ext, 'kmExtent_', algo)
 
-				labelFig(paste0(toupper(algo), ' using ', toupper(gcm), ' with ', ext, '-km extent'), adj=c(0.65, 0.01), cex=4.2)
+				# remember
+				enmScenarios$enms <- rbind(
+					enmScenarios$enms,
+					data.frame(
+						numRefugia = thresholds$numRefugia[this],
+						gcm = gcm,
+						ext = ext,
+						algo = algo,
+						threshold = threshold,
+						cbi = thresholds$cbi[this],
+						tss = thresholds$tss[this],
+						se = thresholds$se[this],
+						sp = thresholds$sp[this],
+						auc = thresholds$auc[this],
+						meanRefugeAbund = refs$meanRefugeAbund,
+						rasterStackName = setString
+					)
+				)
 				
-				labelFig('LGM', adj=c(0.08, -0.08), cex=3.8)
-				text <- if (numRefugia == 1) { '1 refugium' } else { paste(numRefugia, 'refugia') }
-				labelFig(text, adj=c(0.08, -0.14), cex=3.8)
-				labelFig('ice', adj=c(0.5, -0.3), cex=3)
-		
-				### SQ
-				x <- pred[[701]]
-				land <- sqLand
-				
-				# thresholded predictions
-				thold <- thresholds$threshold[thresholds$gcm == gcm & thresholds$extent == ext & thresholds$algorithm == algo]
+				enmScenarios$refugeCellIds[[length(enmScenarios$refugeCellIds) + 1]] <- refs$refugeCellIds
+				names(enmScenarios$refugeCellIds)[length(enmScenarios$refugeCellIds)] <- setString
 
-				x <- x >= thold
-				x <- calc(x, fun=function(x) ifelse(x == 0, NA, x))
-				cols <- alpha('forestgreen', 0.7)
-
-				# plot extent
-				plot(plotExtent, border=NA, bg=NA, fg=NA, col=NA, ann=FALSE, main='')
-				plot(land, col='gray80', legend=FALSE, add=TRUE)
-				plot(littleRangeSpAlb, col='orange', border='darkorange4', lwd=2, add=TRUE)
-				plot(x, legend=FALSE, add=TRUE, col=cols)
-				
-				tss <- thresholds$tss[thresholds$gcm == gcm & thresholds$extent == ext & thresholds$algorithm == algo]
-				se <- thresholds$se[thresholds$gcm == gcm & thresholds$extent == ext & thresholds$algorithm == algo]
-				sp <- thresholds$sp[thresholds$gcm == gcm & thresholds$extent == ext & thresholds$algorithm == algo]
-				
-				legend('bottomright', inset=c(0.08, 0.17), legend=c('Little', 'Predicted'), fill=c('orange', alpha('forestgreen', 0.7)), border=c('darkorange4', NA), bty='n', cex=2.5, xpd=NA)
-				
-				labelFig('Present', adj=c(0.08, -0.08), cex=3.8)
-				labelFig(paste0('TSS: ', sprintf('%.2f', tss), ' | Se = ', sprintf('%.2f', se), ' | Sp = ', sprintf('%.2f', sp)), adj=c(0.08, -0.14), cex=3.8)
-		
 			} # next algorithm
 			
-			mtext('LGM and Present-Day Predicted Distributions', side=3, cex=3.8, outer=TRUE, line=-0.5)
-			mtext(date(), side=1, cex=1, outer=TRUE)
-
-			dev.off()
-			
 		} # next extent
-
+		
 	} # next GCM
+	
+	enmScenarios$thresholds <- thresholds
+	
+	save(enmScenarios, file='./predictions/!collated_enms_for_demographic_simulations.rda')
 		
 # say('#################################')
 # say('### calculate biotic velocity ###')
