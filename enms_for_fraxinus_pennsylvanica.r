@@ -2082,7 +2082,6 @@ say('################################################')
 	# object to send to demographic simulations
 	enmScenarios <- list()
 	enmScenarios$enms <- data.frame()
-	enmScenarios$refugeCellIds <- list()
 
 	for (gcm in gcms) {
 
@@ -2102,7 +2101,7 @@ say('################################################')
 				first <- rasts[[1]]
 
 				refs <- assignRefugiaFromAbundanceRaster(first, sim=sim, threshold=threshold)
-				thresholds$numRefugia[this] <- cellStats(refs$simulationScale[['id']], 'max')
+				thresholds$numRefugia[this] <- maxValue(refs$simulationScale[['refugiaId']])
 
 				setString <- paste0(gcm, '_' , ext, 'kmExtent_', algo)
 
@@ -2125,16 +2124,14 @@ say('################################################')
 					)
 				)
 				
-				enmScenarios$refugeCellIds[[length(enmScenarios$refugeCellIds) + 1]] <- refs$refugeCellIds
-				names(enmScenarios$refugeCellIds)[length(enmScenarios$refugeCellIds)] <- setString
+				enmScenarios$refugeCellNum[[length(enmScenarios$refugeCellNum) + 1]] <- refs$refugeCellNum
+				names(enmScenarios$refugeCellNum)[length(enmScenarios$refugeCellNum)] <- setString
 
 			} # next algorithm
 			
 		} # next extent
 		
 	} # next GCM
-	
-	enmScenarios$thresholds <- thresholds
 	
 	save(enmScenarios, file='./predictions/!collated_enms_for_demographic_simulations.rda')
 		
